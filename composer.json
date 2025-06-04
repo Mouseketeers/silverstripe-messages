@@ -1,0 +1,24 @@
+{
+    "name": "mouseketeers/silverstripe-messages",
+    "description": "A SilverStripe module to send messages to users",
+    "type": "silverstripe-module",
+    "keywords": [
+        "silverstripe",
+        "messages",
+        "email"
+    ],
+    "license": "BSD-3-Clause",
+    "authors": [
+        {
+            "name": "Henrik Olsen",
+            "email": "henrik@mouseketeers.dk"
+        }
+    ],
+    "require": {
+        "silverstripe/framework": "^3.6"
+    },
+    "minimum-stability": "stable",
+	"extra": {
+		"installer-name": "messages"
+	}    
+}
