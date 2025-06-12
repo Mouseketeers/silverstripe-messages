@@ -10,8 +10,10 @@ class GroupMessage extends DataObject
 	private static $db = [
 		'Title' => 'Varchar(100)',
 		'Body' => 'HTMLText',
-		'SendAsEmail' => 'Boolean',
-		'SendAsPushNoticification' => 'Boolean'
+		'SendEmail' => 'Boolean',
+		'SendPushNoticification' => 'Boolean',
+		'IsSent' => 'Boolean',
+		'Label' => 'Varchar(50)'
 	];
 
 	private static $has_one = [
@@ -36,13 +38,17 @@ class GroupMessage extends DataObject
 		'Subsite.Title' => 'Site',
 	];
 
-    public function populateDefaults()
-    {
-        if(class_exists('Subsite')) {
-            $this->SubsiteID = Subsite::currentSubsiteID();
-        }
+	private static $indexes = [
+		'Label' => true,
+	];
+
+	public function populateDefaults()
+	{
+		if (class_exists('Subsite')) {
+			$this->SubsiteID = Subsite::currentSubsiteID();
+		}
 		parent::populateDefaults();
-	}	
+	}
 
 	public function getCMSFields()
 	{
@@ -50,6 +56,9 @@ class GroupMessage extends DataObject
 		$fields = parent::getCMSFields();
 
 		$fields->removeByName('Groups');
+		$fields->removeByName('IsSent');
+		$fields->removeByName('Label');
+
 
 		$groups = Group::get();
 		if ($groups) {
@@ -65,25 +74,24 @@ class GroupMessage extends DataObject
 					->setSource($groupsMap)
 					->setAttribute(
 						'data-placeholder',
-						_t('Member.ADDGROUP', 'Add group', 'Placeholder text for a dropdown')
+						'Add group'
 					)
 			);
 		}
 
-        if(class_exists('Subsite')) {
-            $subsites = Subsite::all_sites();
-            $fields->insertAfter(
-                DropdownField::create(
-                    'SubsiteID', 
-                    'Site', 
-                    $subsites->map('ID', 'Title')
-                ),
-                'Groups'
-            );
-        }
-        else {
-            $fields->removeByName('SubsiteID');
-        }		
+		if (class_exists('Subsite')) {
+			$subsites = Subsite::all_sites();
+			$fields->insertAfter(
+				DropdownField::create(
+					'SubsiteID',
+					'Site',
+					$subsites->map('ID', 'Title')
+				),
+				'Groups'
+			);
+		} else {
+			$fields->removeByName('SubsiteID');
+		}
 
 		// Modify the related Messages GridField
 		if ($messagesField = $fields->dataFieldByName('Messages')) {
@@ -98,38 +106,47 @@ class GroupMessage extends DataObject
 			$config->addComponent(new GridFieldDeleteAction());
 		}
 
+		$fields->addFieldToTab(
+			'Root.Main',
+			TextField::create(
+				'Label',
+				'Label (optional)',
+				$this->Label
+			)->setDescription('Used for automated messages sent on specific occations, such as a new user registration.')
+		);
 		return $fields;
 	}
-	public function getCMSValidator() {
-        $requiredFields = RequiredFields::create(
-            array(
+	public function getCMSValidator()
+	{
+		$requiredFields = RequiredFields::create(
+			array(
 				'Title',
 				'Body',
 				'Groups'
-            )
-        );
-        if(class_exists('Subsite')) {
-            $requiredFields->addRequiredField('SubsiteID');
-        }
-        return $requiredFields;
+			)
+		);
+		if (class_exists('Subsite')) {
+			$requiredFields->addRequiredField('SubsiteID');
+		}
+		return $requiredFields;
 	}
 
 	public function process($data = null, $form = null)
 	{
-		if($form) {
+		if ($form) {
 			$form->saveInto($this);
-		}		
+		}
+		$this->IsSent = true;
 		$this->write();
 		if ($this->Groups()->exists()) {
 			$this->createJob();
 			return true;
 		}
 		return false;
-	}	
+	}
 
 	public function processMessages()
 	{
-
 		if ($this->Groups()->exists()) {
 			$groups = $this->Groups();
 			$existingMessages = $this->Messages()->column('MemberID');
@@ -137,11 +154,19 @@ class GroupMessage extends DataObject
 				$members = $group->Members();
 				foreach ($members as $member) {
 					if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
-						$this->createMessage($member);
+						$this->processMessageToMember($member);
 						sleep(1);
 					}
 				}
 			}
+		}
+	}
+
+	public function processMessageToMember($member)
+	{
+		$message = $this->createMessage($member);
+		if ($message) {
+			$message->process();
 		}
 	}
 
@@ -157,8 +182,8 @@ class GroupMessage extends DataObject
 		$message->Title = $this->Title;
 		$message->ImageID = $this->ImageID;
 		$message->VideoID = $this->VideoID;
-		$message->SendAsEmail = $this->SendAsEmail;
-		$message->SendAsPushNoticification = $this->SendAsPushNoticification;
+		$message->SendEmail = $this->SendEmail;
+		$message->SendPushNoticification = $this->SendPushNoticification;
 		$message->SubsiteID = $this->SubsiteID;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),
@@ -168,7 +193,7 @@ class GroupMessage extends DataObject
 			])
 		);
 		$message->write();
-		$message->process();
+		return $message;
 	}
 
 	private function createJob()

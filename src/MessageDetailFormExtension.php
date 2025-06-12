@@ -2,6 +2,7 @@
 class MessageDetailFormExtension extends Extension {
     
     public function doSend($data, $form) {
+        
         $record = $form->getRecord();
 
         if ($record && $record->hasMethod('process')) {

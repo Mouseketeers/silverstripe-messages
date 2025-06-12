@@ -21,13 +21,16 @@ class MessagesAdmin extends ModelAdmin {
 	            $detailForm = $config->getComponentByType('GridFieldDetailForm');
 	            if ($detailForm) {
 	                $detailForm->setItemEditFormCallback(function($form, $controller) use ($class) {
-	                    // $record = $form->getRecord();
-	                    // if ($record && $record->ID && ($record instanceof Message || $record instanceof GroupMessage)) {
-	                        $form->Actions()->push(
-	                            FormAction::create('doSend', 'Send')
-	                                ->setUseButtonTag(true)
-	                                ->addExtraClass('btn btn-primary')
-	                        );
+	                    $record = $form->getRecord();
+						$buttonLabel = 'Send';
+						if($record->IsSent) {
+							$buttonLabel = 'Resend';
+						}
+						$form->Actions()->push(
+							FormAction::create('doSend', $buttonLabel)
+								->setUseButtonTag(true)
+								->addExtraClass('btn btn-primary')
+						);
 	                });
 	            }
 	        }

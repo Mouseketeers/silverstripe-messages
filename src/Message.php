@@ -1,15 +1,6 @@
 <?php
 
-// use Kreait\Firebase\Factory;
-// use Kreait\Firebase\Messaging\CloudMessage;
-
-// require '/vendor/autoload.php';
-
-
 class Message extends DataObject {
-
-
-
 
 	private static $table_name = 'Message';
 
@@ -20,8 +11,9 @@ class Message extends DataObject {
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
         'IsRead' => 'Boolean',
-        'SendAsEmail' => 'Boolean',
-        'SendAsPushNoticification' => 'Boolean',
+        'SendEmail' => 'Boolean',
+        'SendPushNoticification' => 'Boolean',
+		'IsSent' => 'Boolean',
 		'DateSent' => 'SS_Datetime'
 	);
 
@@ -47,17 +39,30 @@ class Message extends DataObject {
         if(class_exists('Subsite')) {
             $this->SubsiteID = Subsite::currentSubsiteID();
         }
+		$this->IsRead = false;
 		parent::populateDefaults();
 	}	
 
 	public function getRecipient() {
+		if(!$this->Member()->exists()) {
+			return 'Recipient not found';
+		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
 	}
 	public function getCMSFields() {
 		
 		$fields = parent::getCMSFields();
 
-		$isSent = $this->DateSent ? true : false;
+		$fields->removeByName('IsSent');
+		$fields->removeByName('GroupMessageID');
+		$fields->removeByName('MemberID');
+
+		if($this->IsSent) {
+			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
+		}
+		else {
+			$fields->removeByName('IsRead');
+		}		
 
 		if ($this->DateSent) {
 			$fields->insertBefore(
@@ -67,27 +72,31 @@ class Message extends DataObject {
 		}
 		else {
 			$fields->removeByName('DateSent');
-		}		
-
-		$members = Member::get()->sort('Created DESC');
-		if($members) {
-			$membersMap = [];
-			foreach ($members as $member) {
-				$membersMap[$member->ID] = $member->FirstName . ' ' . $member->Surname . ' (' . $member->Email . ')';
-			}
-			$fields->insertBefore('Title',
-				DropdownField::create('MemberID', 'Recipient')
-					->setSource($membersMap)
-					->setEmptyString('None')
-					->setDisabled(false)
-			);
 		}
-		// if($isSent) {
-		// 	$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
-		// }
-		// else {
-		// 	$fields->removeByName('IsRead');
-		// }
+
+
+		if(!$this->IsSent) {
+			$members = Member::get()->sort('Created DESC');
+			if($members) {
+				$membersMap = [];
+				foreach ($members as $member) {
+					$membersMap[$member->ID] = $member->Email . ' (' . $member->FirstName . ' ' . $member->Surname . ')';
+				}
+				$fields->insertBefore('Title',
+					DropdownField::create('MemberID', 'Recipient')
+						->setSource($membersMap)
+						->setEmptyString('None')
+						->setDisabled(false)
+				);
+			}
+		}
+		else {
+			$fields->insertBefore('Title',
+				ReadonlyField::create('Recipient', 'Recipient', $this->getRecipient())
+			);	
+
+		}
+
 
         if(class_exists('Subsite')) {
             $subsites = Subsite::all_sites();
@@ -102,9 +111,7 @@ class Message extends DataObject {
         }
         else {
             $fields->removeByName('SubsiteID');
-        }		
-
-		$fields->removeByName('GroupMessageID');
+        }
 
 		return $fields;
 	}
@@ -120,9 +127,30 @@ class Message extends DataObject {
             $requiredFields->addRequiredField('SubsiteID');
         }
         return $requiredFields;
+	}
+	
+	public function process($data = null, $form = null) {
+
+		if($form) {
+			$form->saveInto($this);
+		}
+		$this->IsSent = true;
+		$this->DateSent = SS_Datetime::now()->Rfc2822();
+		$this->write();
+
+		if($this->Member()->exists()) {
+			if($this->SendEmail) {
+				$this->SendEmail();
+			}
+			if($this->SendPushNoticification) {
+				$this->sendPushNotification();
+			}			
+			return true;
+		}
+		return false;
 	}	
 	
-	public function sendAsEmail() {
+	public function sendEmail() {
 
 		$siteConfig = SiteConfig::current_site_config();
 		$defaultFromEmail = $siteConfig->DefaultFromEmail;
@@ -156,7 +184,8 @@ class Message extends DataObject {
 			return $email->send();
 		}
 	}
-	public function sendAsPushNotification() {
+	public function sendPushNotification() {
+		
 		$recipient = $this->Member();
 
 		if (!$recipient || !$recipient->PushNotificationToken) {
@@ -170,7 +199,6 @@ class Message extends DataObject {
 		$accessToken = $this->getGoogleAccessToken($serviceAccountFile);
 
 		if (!$accessToken) {
-			SS_Log::warn('No access token for FCM push notification');
 			return false;
 		}
 
@@ -178,6 +206,13 @@ class Message extends DataObject {
 		$projectId = 'garia-app'; // Replace with your project ID
 
 		$url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
+
+		$unreadMessages = Message::get()
+			->filter([
+				'MemberID' => $recipient->ID,
+				'IsRead' => false
+			])
+			->count();
 
 		$message = [
 			'message' => [
@@ -189,7 +224,14 @@ class Message extends DataObject {
 				'data' => [
 					'message_id' => (string)$this->ID,
 					'url' => '/message/' . $this->ID
-				]
+				],
+				'apns' => [
+					'payload' => [
+						'aps' => [
+							'badge' => $unreadMessages
+						]
+					]
+				]				
 			]
 		];
 
@@ -210,20 +252,12 @@ class Message extends DataObject {
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
 
-		SS_Log::log("Bearer $accessToken", SS_Log::INFO);
-		SS_Log::log("Sending FCM push to: $url", SS_Log::INFO);
-		SS_Log::log("Payload: " . $payload, SS_Log::INFO);
-		SS_Log::log("FCM response: " . $response, SS_Log::INFO);
-
 		if ($httpCode != 200) {
-			// SS_Log::warn('Push notification failed: ' . $response);
 			return false;
 		}
 
 		return true;
 	}
-
-	
 
 	/**
 	 * Get Google OAuth2 access token from service account JSON
@@ -264,33 +298,11 @@ class Message extends DataObject {
 		$result = curl_exec($ch);
 		curl_close($ch);
 
-		SS_Log::log("Google OAuth token response: " . $result, SS_Log::INFO);
-
 		$json = json_decode($result, true);
 		return isset($json['access_token']) ? $json['access_token'] : null;
 	}
 	public function onAfterSerialize(&$formattedDataObjectMap) {
 		$formattedDataObjectMap['SentAgo'] = $this->dbObject('DateSent')->Ago();
+		$formattedDataObjectMap['SentShort'] = $this->dbObject('DateSent')->Ago();
 	}
-	public function process($data = null, $form = null) {
-
-
-		if($form) {
-			$form->saveInto($this);
-		}
-		$this->DateSent = SS_Datetime::now()->Rfc2822();
-		$this->write();
-
-		if($this->Member()->exists()) {
-			if($this->SendAsEmail) {
-				$this->SendAsEmail();
-			}
-			if($this->SendAsPushNoticification) {
-				$this->sendAsPushNotification();
-			}			
-			return true;
-		}
-		return false;
-	}
-
 }
