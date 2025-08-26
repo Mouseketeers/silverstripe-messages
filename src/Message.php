@@ -1,5 +1,22 @@
 <?php
 
+namespace Mouseketeers\Messages;
+
+use SilverStripe\ORM\DataObject;
+use SilverStripe\Security\Member;
+use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\SiteConfig\SiteConfig;
+use SilverStripe\Control\Email\Email;
+use SilverStripe\Forms\DropdownField;
+use SilverStripe\Forms\ReadonlyField;
+use SilverStripe\Forms\RequiredFields;
+use SilverStripe\ORM\FieldType\DBDatetime;
+use SilverStripe\Assets\File;
+use SilverStripe\Assets\Image;
+use SilverStripe\Core\Injector\Injector;
+use Psr\Log\LoggerInterface;
+use Mouseketeers\Messages\GroupMessage;
+
 class Message extends DataObject {
 
 	private static $table_name = 'Message';
@@ -14,15 +31,15 @@ class Message extends DataObject {
         'SendEmail' => 'Boolean',
         'SendPushNoticification' => 'Boolean',
 		'IsSent' => 'Boolean',
-		'DateSent' => 'SS_Datetime'
+		'DateSent' => 'Datetime' // Change from 'SS_Datetime'
 	);
 
 	private static $has_one = array(
-        'Member' => 'Member',
-		'GroupMessage' => 'GroupMessage',
-		'Image' => 'Image',
-		'Video' => 'File',
-		'Subsite' => 'Subsite'
+        'Member' => Member::class,
+		'GroupMessage' => GroupMessage::class, // Make sure GroupMessage is also namespaced
+		'Image' => Image::class,
+		'Video' => File::class,
+		'Subsite' => Subsite::class
 	);
 
     private static $summary_fields = [
@@ -36,7 +53,7 @@ class Message extends DataObject {
 
     public function populateDefaults()
     {
-        if(class_exists('Subsite')) {
+        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
             $this->SubsiteID = Subsite::currentSubsiteID();
         }
 		$this->IsRead = false;
@@ -98,8 +115,8 @@ class Message extends DataObject {
 		}
 
 
-        if(class_exists('Subsite')) {
-            $subsites = Subsite::all_sites();
+        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
+            $subsites = Subsite::get();
             $fields->insertBefore(
                 DropdownField::create(
                     'SubsiteID', 
@@ -123,7 +140,7 @@ class Message extends DataObject {
 				'MemberID'
             )
         );
-        if(class_exists('Subsite')) {
+        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
             $requiredFields->addRequiredField('SubsiteID');
         }
         return $requiredFields;
@@ -135,7 +152,7 @@ class Message extends DataObject {
 			$form->saveInto($this);
 		}
 		$this->IsSent = true;
-		$this->DateSent = SS_Datetime::now()->Rfc2822();
+		$this->DateSent = DBDatetime::now()->Rfc2822();
 		$this->write();
 
 		if($this->Member()->exists()) {
@@ -154,32 +171,24 @@ class Message extends DataObject {
 
 		$siteConfig = SiteConfig::current_site_config();
 		$defaultFromEmail = $siteConfig->DefaultFromEmail;
-		$receipient = $this->Member();
+		$recipient = $this->Member();
 
-		if($defaultFromEmail)	{
-			$email = new Email();
-			$email->setFrom($defaultFromEmail);
-			$email->setTo($receipient->Email);
-			$email->setSubject($this->Title);
+		if($defaultFromEmail) {
+			$email = Email::create()
+				->setFrom($defaultFromEmail)
+				->setTo($recipient->Email)
+				->setSubject($this->Title)
+				->setHTMLTemplate('MessageEmail'); // Changed from setTemplate
 
 			$templateData = array(
-				'FirstName' => $receipient->FirstName,
-				'Surname' => $receipient->Surname,
+				'FirstName' => $recipient->FirstName,
+				'Surname' => $recipient->Surname,
 				'Body' => $this->Body,
 				'Image' => $this->Image(),
 				'Video' => $this->Video()
-			);			
+			);
 
-			$theme = 'garia';
-			$subsite = DataObject::get_by_id('Subsite', $this->SubsiteID);
-            if ($subsite && $subsite->Theme) {
-				$theme = $subsite->Theme;
-            }
-			SSViewer::set_theme($theme);
-			Config::inst()->update('SSViewer', 'theme_enabled', true); // otherwise ss will fail
-
-			$email->setTemplate('MessageEmail');
-			$email->populateTemplate($templateData);			
+			$email->setData($templateData); // Changed from populateTemplate
 
 			return $email->send();
 		}
@@ -199,6 +208,7 @@ class Message extends DataObject {
 		$accessToken = $this->getGoogleAccessToken($serviceAccountFile);
 
 		if (!$accessToken) {
+			Injector::inst()->get(LoggerInterface::class)->warning('No access token for FCM push notification');
 			return false;
 		}
 
@@ -253,6 +263,7 @@ class Message extends DataObject {
 		curl_close($ch);
 
 		if ($httpCode != 200) {
+			Injector::inst()->get(LoggerInterface::class)->warning('FCM response error: ' . $response);
 			return false;
 		}
 

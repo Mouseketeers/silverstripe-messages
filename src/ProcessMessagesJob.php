@@ -1,5 +1,9 @@
 <?php
 
+namespace Mouseketeers\Messages;
+
+use Symbiote\QueuedJobs\Services\AbstractQueuedJob;
+
 class ProcessMessagesJob extends AbstractQueuedJob
 {
     private $title = 'Process Messages';

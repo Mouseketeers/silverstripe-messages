@@ -1,11 +1,18 @@
 <?php
+
+namespace Mouseketeers\Messages;
+
+use SilverStripe\Admin\ModelAdmin;
+use SilverStripe\Forms\GridField\GridFieldDetailForm;
+use SilverStripe\Forms\FormAction;
+
 class MessagesAdmin extends ModelAdmin {
 
 	// private static $menu_icon = 'app/images/cms/order-admin.png';
 	
 	private static $managed_models = array(
-		'Message',
-		'GroupMessage'
+		Message::class,
+		GroupMessage::class
 	);
 	private static $url_segment = 'messages';
 
@@ -14,11 +21,11 @@ class MessagesAdmin extends ModelAdmin {
 	public function getEditForm($id = null, $fields = null) {
 	    $form = parent::getEditForm($id, $fields);
 
-	    foreach (array('Message', 'GroupMessage') as $class) {
+	    foreach (array(Message::class, GroupMessage::class) as $class) {
 	        $gridField = $form->Fields()->dataFieldByName($this->sanitiseClassName($class));
 	        if ($gridField) {
 	            $config = $gridField->getConfig();
-	            $detailForm = $config->getComponentByType('GridFieldDetailForm');
+	            $detailForm = $config->getComponentByType(GridFieldDetailForm::class);
 	            if ($detailForm) {
 	                $detailForm->setItemEditFormCallback(function($form, $controller) use ($class) {
 	                    $record = $form->getRecord();

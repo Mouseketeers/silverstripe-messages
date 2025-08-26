@@ -1,4 +1,25 @@
 <?php
+
+namespace Mouseketeers\Messages;
+
+use SilverStripe\ORM\DataObject;
+use SilverStripe\Security\Group;
+use SilverStripe\Assets\File;
+use SilverStripe\Assets\Image;
+use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\Forms\DropdownField;
+use SilverStripe\Forms\ListboxField;
+use SilverStripe\Forms\TextField;
+use SilverStripe\Forms\RequiredFields;
+use SilverStripe\Forms\GridField\GridFieldDeleteAction;
+use SilverStripe\View\SSViewer;
+use SilverStripe\View\Parsers\ShortcodeParser;
+use SilverStripe\View\ArrayData;
+use SilverStripe\Core\Injector\Injector;
+use Symbiote\QueuedJobs\Services\QueuedJobService;
+
+
+
 class GroupMessage extends DataObject
 {
 
@@ -17,17 +38,17 @@ class GroupMessage extends DataObject
 	];
 
 	private static $has_one = [
-		'Image' => 'Image',
-		'Video' => 'File',
-		'Subsite' => 'Subsite'
+		'Image' => Image::class,
+		'Video' => File::class,
+		'Subsite' => Subsite::class
 	];
 
 	private static $many_many = [
-		'Groups' => 'Group',
+		'Groups' => Group::class,
 	];
 
 	private static $has_many = [
-		'Messages' => 'Message',
+		'Messages' => Message::class,
 	];
 
 	private static $default_sort = 'Created DESC';
@@ -44,7 +65,7 @@ class GroupMessage extends DataObject
 
 	public function populateDefaults()
 	{
-		if (class_exists('Subsite')) {
+		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
 			$this->SubsiteID = Subsite::currentSubsiteID();
 		}
 		parent::populateDefaults();
@@ -79,8 +100,8 @@ class GroupMessage extends DataObject
 			);
 		}
 
-		if (class_exists('Subsite')) {
-			$subsites = Subsite::all_sites();
+		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
+			$subsites = Subsite::get();
 			$fields->insertAfter(
 				DropdownField::create(
 					'SubsiteID',
@@ -125,7 +146,7 @@ class GroupMessage extends DataObject
 				'Groups'
 			)
 		);
-		if (class_exists('Subsite')) {
+		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
 		return $requiredFields;

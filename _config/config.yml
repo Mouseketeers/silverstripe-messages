@@ -1,3 +1,6 @@
 ---
 Name: messages
 ---
+SilverStripe\Forms\GridField\GridFieldDetailForm_ItemRequest:
+  extensions:
+    - Mouseketeers\Messages\MessageDetailFormExtension

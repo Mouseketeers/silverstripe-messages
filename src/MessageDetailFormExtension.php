@@ -1,4 +1,10 @@
 <?php
+
+namespace Mouseketeers\Messages;
+
+use SilverStripe\Core\Extension;
+use SilverStripe\Control\Controller;
+
 class MessageDetailFormExtension extends Extension {
     
     public function doSend($data, $form) {
