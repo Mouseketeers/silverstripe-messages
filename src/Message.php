@@ -32,7 +32,7 @@ class Message extends DataObject {
 		'Subsite.Title' => 'Site'
 	];
 
-	private static $default_sort = 'Created DESC';
+	private static $default_sort = 'DateSent DESC, Created DESC';
 
     public function populateDefaults()
     {
