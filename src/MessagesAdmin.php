@@ -2,10 +2,12 @@
 class MessagesAdmin extends ModelAdmin {
 
 	// private static $menu_icon = 'app/images/cms/order-admin.png';
+
+	private static $menu_icon = '/messages/images/message.svg';
 	
 	private static $managed_models = array(
-		'Message',
-		'GroupMessage'
+		'GroupMessage',
+		'Message'
 	);
 	private static $url_segment = 'messages';
 
@@ -38,4 +40,7 @@ class MessagesAdmin extends ModelAdmin {
 
 	    return $form;
 	}
+	public function subsiteCMSShowInMenu(){
+		return true;
+	}	
 }

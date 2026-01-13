@@ -26,13 +26,24 @@ class Message extends DataObject {
 	);
 
     private static $summary_fields = [
+		'Subsite.Title' => 'Site',
 		'Recipient' => 'Recipient',
 		'Title' => 'Title',
 		'DateSent.Nice' => 'Sent',
-		'Subsite.Title' => 'Site'
 	];
 
 	private static $default_sort = 'DateSent DESC, Created DESC';
+
+	private static $defaults = [
+		'SendEmail' => true,
+		'SendPushNoticification' => false,
+		'IsSent' => false,
+	];
+
+	private static $field_labels = [
+		'SendEmail' => 'Send Message as Email',
+		'SendPushNoticification' => 'Send Message as Push Notification',
+	];		
 
     public function populateDefaults()
     {
@@ -140,10 +151,27 @@ class Message extends DataObject {
 
 		if($this->Member()->exists()) {
 			if($this->SendEmail) {
-				$this->SendEmail();
+				$emailResult = $this->sendEmail();
+				if($emailResult !== true) {
+					// Log error and potentially show user feedback
+					SS_Log::log('Failed to send email for Message ID ' . $this->ID . ': ' . $emailResult, SS_Log::ERR);
+					if($form) {
+						$form->sessionMessage('Message saved but email failed to send: ' . $emailResult, 'warning');
+					}
+				} else {
+					if($form) {
+						$form->sessionMessage('Message sent successfully via email', 'good');
+					}
+				}
 			}
 			if($this->SendPushNoticification) {
-				$this->sendPushNotification();
+				$pushResult = $this->sendPushNotification();
+				if($pushResult !== true) {
+					SS_Log::log('Failed to send push notification for Message ID ' . $this->ID, SS_Log::ERR);
+					if($form) {
+						$form->sessionMessage('Push notification failed to send', 'warning');
+					}
+				}
 			}			
 			return true;
 		}
@@ -151,37 +179,71 @@ class Message extends DataObject {
 	}	
 	
 	public function sendEmail() {
+		try {
+			// Validate SubsiteID exists
+			if(!$this->SubsiteID) {
+				return 'Cannot send email: No Subsite selected for this message';
+			}
 
-		$siteConfig = SiteConfig::current_site_config();
-		$defaultFromEmail = $siteConfig->DefaultFromEmail;
-		$receipient = $this->Member();
+			// Get site configuration
+			$siteConfig = SiteConfig::get()->filter('SubsiteID', $this->SubsiteID)->first();
+			
+			if(!$siteConfig) {
+				return 'Cannot send email: Site configuration not found for SubsiteID ' . $this->SubsiteID;
+			}
 
-		if($defaultFromEmail)	{
+			// Validate DefaultFromEmail exists
+			$defaultFromEmail = $siteConfig->DefaultFromEmail;
+			if(!$defaultFromEmail) {
+				return 'Cannot send email: No default from email address configured for this site';
+			}
+
+			// Validate recipient
+			$recipient = $this->Member();
+			if(!$recipient || !$recipient->exists()) {
+				return 'Cannot send email: No valid recipient found';
+			}
+			
+			if(!$recipient->Email) {
+				return 'Cannot send email: No recipient email address';
+			}
+
+			// Create and configure email
 			$email = new Email();
 			$email->setFrom($defaultFromEmail);
-			$email->setTo($receipient->Email);
+			$email->setTo($recipient->Email);
 			$email->setSubject($this->Title);
 
 			$templateData = array(
-				'FirstName' => $receipient->FirstName,
-				'Surname' => $receipient->Surname,
+				'FirstName' => $recipient->FirstName,
+				'Surname' => $recipient->Surname,
 				'Body' => $this->Body,
 				'Image' => $this->Image(),
 				'Video' => $this->Video()
-			);			
+			);
 
-			$theme = 'garia';
+			// Set theme based on subsite
+			$theme = 'garia'; // Default theme
 			$subsite = DataObject::get_by_id('Subsite', $this->SubsiteID);
-            if ($subsite && $subsite->Theme) {
+			if ($subsite && $subsite->Theme) {
 				$theme = $subsite->Theme;
-            }
+			}
 			SSViewer::set_theme($theme);
-			Config::inst()->update('SSViewer', 'theme_enabled', true); // otherwise ss will fail
+			Config::inst()->update('SSViewer', 'theme_enabled', true);
 
 			$email->setTemplate('MessageEmail');
-			$email->populateTemplate($templateData);			
+			$email->populateTemplate($templateData);
 
-			return $email->send();
+			// Send email and handle result
+			$result = $email->send();
+			if($result) {
+				return true;
+			} else {
+				return 'Failed to send email - email service returned false';
+			}
+			
+		} catch(Exception $e) {
+			return 'Email sending failed with exception: ' . $e->getMessage();
 		}
 	}
 	public function sendPushNotification() {

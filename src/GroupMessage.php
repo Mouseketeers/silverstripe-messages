@@ -30,12 +30,23 @@ class GroupMessage extends DataObject
 		'Messages' => 'Message',
 	];
 
+	private static $defaults = [
+		'SendEmail' => true,
+		'SendPushNoticification' => false,
+		'IsSent' => false,
+	];
+
+	private static $field_labels = [
+		'SendEmail' => 'Send Messages as Emails',
+		'SendPushNoticification' => 'Send Messages as Push Notifications',
+	];	
+
 	private static $default_sort = 'Created DESC';
 
 	private static $summary_fields = [
-		'Title',
-		'Created.Nice' => 'Created',
 		'Subsite.Title' => 'Site',
+		'Title',
+		'Created.Nice' => 'Created'
 	];
 
 	private static $indexes = [
@@ -147,6 +158,13 @@ class GroupMessage extends DataObject
 
 	public function processMessages()
 	{
+		$stats = [
+			'messages_created' => 0,
+			'emails_sent' => 0,
+			'emails_failed' => 0,
+			'push_notifications_sent' => 0
+		];
+		
 		if ($this->Groups()->exists()) {
 			$groups = $this->Groups();
 			$existingMessages = $this->Messages()->column('MemberID');
@@ -154,20 +172,62 @@ class GroupMessage extends DataObject
 				$members = $group->Members();
 				foreach ($members as $member) {
 					if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
-						$this->processMessageToMember($member);
+						$result = $this->processMessageToMember($member);
+						if($result) {
+							$stats['messages_created']++;
+							if($result['email_sent']) {
+								$stats['emails_sent']++;
+							} elseif($result['email_attempted']) {
+								$stats['emails_failed']++;
+							}
+							if($result['push_sent']) {
+								$stats['push_notifications_sent']++;
+							}
+						}
 						sleep(1);
 					}
 				}
 			}
 		}
+		
+		return $stats;
 	}
 
 	public function processMessageToMember($member)
 	{
 		$message = $this->createMessage($member);
 		if ($message) {
-			$message->process();
+			$emailResult = null;
+			$pushResult = null;
+			$emailAttempted = false;
+			$pushAttempted = false;
+			
+			// Process the message and capture results
+			if($message->SendEmail) {
+				$emailAttempted = true;
+				$emailResult = $message->sendEmail();
+			}
+			
+			if($message->SendPushNoticification) {
+				$pushAttempted = true;
+				$pushResult = $message->sendPushNotification();
+			}
+			
+			// Mark as sent and save
+			$message->IsSent = true;
+			$message->DateSent = SS_Datetime::now()->Rfc2822();
+			$message->write();
+			
+			return [
+				'message' => $message,
+				'email_sent' => $emailResult === true,
+				'email_attempted' => $emailAttempted,
+				'email_error' => $emailResult !== true ? $emailResult : null,
+				'push_sent' => $pushResult === true,
+				'push_attempted' => $pushAttempted
+			];
 		}
+		return null;
 	}
 
 	public function createMessage($member)
@@ -198,8 +258,7 @@ class GroupMessage extends DataObject
 
 	private function createJob()
 	{
-		$job = Injector::inst()->create(ProcessMessagesJob::class);
-		$job->GroupMessage = $this;
+		$job = new ProcessMessagesJob($this);
 		singleton(QueuedJobService::class)->queueJob($job, date('Y-m-d H:i:s', time()));
 	}
 }
