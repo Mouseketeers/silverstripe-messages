@@ -1,32 +1,40 @@
 <?php
 
-class Message extends DataObject {
+class Message extends DataObject
+{
 
 	private static $table_name = 'Message';
 
 	private static $singular_name = 'Message';
 	private static $plural_name = 'Messages';
 
-	private static $db = array(
+	/**
+	 * Firebase configuration
+	 */
+	private static $firebase_project_id = '';
+	private static $firebase_service_account_path = '';
+	private static $push_notification_title = 'New Message';
+
+	private static $db = [
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
-        'IsRead' => 'Boolean',
-        'SendEmail' => 'Boolean',
-        'SendPushNoticification' => 'Boolean',
+		'IsRead' => 'Boolean',
+		'SendEmail' => 'Boolean',
+		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'SS_Datetime'
-	);
+	];
 
-	private static $has_one = array(
-        'Member' => 'Member',
+	private static $has_one = [
+		'Member' => 'Member',
 		'GroupMessage' => 'GroupMessage',
 		'Image' => 'Image',
 		'Video' => 'File',
 		'Subsite' => 'Subsite'
-	);
+	];
 
-    private static $summary_fields = [
-		'Subsite.Title' => 'Site',
+	private static $summary_fields = [
+		'SummarySubsiteTitle' => 'Site',
 		'Recipient' => 'Recipient',
 		'Title' => 'Title',
 		'DateSent.Nice' => 'Sent',
@@ -34,228 +42,328 @@ class Message extends DataObject {
 
 	private static $default_sort = 'DateSent DESC, Created DESC';
 
+	private static $indexes = [
+		'IsSent' => true,
+		'IsRead' => true,
+		'DateSent' => true
+	];
+
 	private static $defaults = [
 		'SendEmail' => true,
-		'SendPushNoticification' => false,
+		'SendPushNotification' => false,
 		'IsSent' => false,
 	];
 
 	private static $field_labels = [
 		'SendEmail' => 'Send Message as Email',
-		'SendPushNoticification' => 'Send Message as Push Notification',
-	];		
+		'SendPushNotification' => 'Send Push Notification to App Users',
+	];
 
-    public function populateDefaults()
-    {
-        if(class_exists('Subsite')) {
-            $this->SubsiteID = Subsite::currentSubsiteID();
-        }
+	public function populateDefaults()
+	{
+		if (class_exists('Subsite')) {
+			$this->SubsiteID = Subsite::currentSubsiteID();
+		}
 		$this->IsRead = false;
 		parent::populateDefaults();
-	}	
+	}
 
-	public function getRecipient() {
-		if(!$this->Member()->exists()) {
+	public function getSummarySubsiteTitle()
+	{
+		if ($this->SubsiteID == 0) {
+			return 'Main Site';
+		}
+		return $this->Subsite()->Title;
+	}
+
+	public function getRecipient()
+	{
+		if (!$this->Member()->exists()) {
 			return 'Recipient not found';
 		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
 	}
-	public function getCMSFields() {
-		
+
+
+	public function getCMSFields()
+	{
+
 		$fields = parent::getCMSFields();
 
 		$fields->removeByName('IsSent');
 		$fields->removeByName('GroupMessageID');
 		$fields->removeByName('MemberID');
 
-		if($this->IsSent) {
+		if ($this->IsSent) {
 			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
-		}
-		else {
+		} else {
 			$fields->removeByName('IsRead');
-		}		
+		}
 
 		if ($this->DateSent) {
 			$fields->insertBefore(
 				'Title',
 				ReadonlyField::create('DateSent', 'Sent')
 			);
-		}
-		else {
+		} else {
 			$fields->removeByName('DateSent');
 		}
 
-
-		if(!$this->IsSent) {
+		if (!$this->IsSent) {
 			$members = Member::get()->sort('Created DESC');
-			if($members) {
+			if ($members) {
 				$membersMap = [];
 				foreach ($members as $member) {
 					$membersMap[$member->ID] = $member->Email . ' (' . $member->FirstName . ' ' . $member->Surname . ')';
 				}
-				$fields->insertBefore('Title',
+				$fields->insertBefore(
+					'Title',
 					DropdownField::create('MemberID', 'Recipient')
 						->setSource($membersMap)
 						->setEmptyString('None')
 						->setDisabled(false)
 				);
 			}
-		}
-		else {
-			$fields->insertBefore('Title',
+		} else {
+			$fields->insertBefore(
+				'Title',
 				ReadonlyField::create('Recipient', 'Recipient', $this->getRecipient())
-			);	
-
+			);
 		}
 
+		if (class_exists('Subsite')) {
+			$subsites = Subsite::all_sites();
+			$fields->insertBefore(
+				DropdownField::create(
+					'SubsiteID',
+					'Send from Site',
+					$subsites->map('ID', 'Title')
+				),
+				'Title'
+			);
+		} else {
+			$fields->removeByName('SubsiteID');
+		}
 
-        if(class_exists('Subsite')) {
-            $subsites = Subsite::all_sites();
-            $fields->insertBefore(
-                DropdownField::create(
-                    'SubsiteID', 
-                    'Send from Site', 
-                    $subsites->map('ID', 'Title')
-                ),
-                'MemberID'
-            );
-        }
-        else {
-            $fields->removeByName('SubsiteID');
-        }
+		// Hide push notification toggle if Firebase is not configured
+		if (!self::isPushNotificationsConfigured()) {
+			$fields->removeByName('SendPushNotification');
+		}
 
 		return $fields;
 	}
-	public function getCMSValidator() {
-        $requiredFields = RequiredFields::create(
-            array(
+
+	public function getCMSValidator()
+	{
+		$requiredFields = RequiredFields::create(
+			array(
 				'Title',
 				'Body',
 				'MemberID'
-            )
-        );
-        if(class_exists('Subsite')) {
-            $requiredFields->addRequiredField('SubsiteID');
-        }
-        return $requiredFields;
+			)
+		);
+		if (class_exists('Subsite')) {
+			$requiredFields->addRequiredField('SubsiteID');
+		}
+		return $requiredFields;
 	}
-	
-	public function process($data = null, $form = null) {
 
-		if($form) {
+	public function process($data = null, $form = null)
+	{
+
+		if ($form) {
 			$form->saveInto($this);
 		}
 		$this->IsSent = true;
 		$this->DateSent = SS_Datetime::now()->Rfc2822();
 		$this->write();
 
-		if($this->Member()->exists()) {
-			if($this->SendEmail) {
+		if ($this->Member()->exists()) {
+			if ($this->SendEmail) {
 				$emailResult = $this->sendEmail();
-				if($emailResult !== true) {
+				if ($emailResult !== true) {
 					// Log error and potentially show user feedback
 					SS_Log::log('Failed to send email for Message ID ' . $this->ID . ': ' . $emailResult, SS_Log::ERR);
-					if($form) {
+					if ($form) {
 						$form->sessionMessage('Message saved but email failed to send: ' . $emailResult, 'warning');
 					}
 				} else {
-					if($form) {
+					if ($form) {
 						$form->sessionMessage('Message sent successfully via email', 'good');
 					}
 				}
 			}
-			if($this->SendPushNoticification) {
+			if ($this->SendPushNotification) {
 				$pushResult = $this->sendPushNotification();
-				if($pushResult !== true) {
+				if ($pushResult !== true) {
 					SS_Log::log('Failed to send push notification for Message ID ' . $this->ID, SS_Log::ERR);
-					if($form) {
+					if ($form) {
 						$form->sessionMessage('Push notification failed to send', 'warning');
 					}
 				}
-			}			
+			}
 			return true;
 		}
 		return false;
-	}	
-	
-	public function sendEmail() {
+	}
+
+	public function sendEmail()
+	{
 		try {
-			// Validate SubsiteID exists
-			if(!$this->SubsiteID) {
-				return 'Cannot send email: No Subsite selected for this message';
+			// Validate all requirements
+			$validation = $this->validateEmailRequirements();
+			if ($validation !== true) {
+				return $validation;
 			}
 
-			// Get site configuration
+			// Get validated data
 			$siteConfig = SiteConfig::get()->filter('SubsiteID', $this->SubsiteID)->first();
-			
-			if(!$siteConfig) {
-				return 'Cannot send email: Site configuration not found for SubsiteID ' . $this->SubsiteID;
-			}
-
-			// Validate DefaultFromEmail exists
-			$defaultFromEmail = $siteConfig->DefaultFromEmail;
-			if(!$defaultFromEmail) {
-				return 'Cannot send email: No default from email address configured for this site';
-			}
-
-			// Validate recipient
 			$recipient = $this->Member();
-			if(!$recipient || !$recipient->exists()) {
-				return 'Cannot send email: No valid recipient found';
-			}
-			
-			if(!$recipient->Email) {
-				return 'Cannot send email: No recipient email address';
-			}
 
-			// Create and configure email
-			$email = new Email();
-			$email->setFrom($defaultFromEmail);
-			$email->setTo($recipient->Email);
-			$email->setSubject($this->Title);
-
-			$templateData = array(
-				'FirstName' => $recipient->FirstName,
-				'Surname' => $recipient->Surname,
-				'Body' => $this->Body,
-				'Image' => $this->Image(),
-				'Video' => $this->Video()
-			);
-
-			// Set theme based on subsite
-			$theme = 'garia'; // Default theme
-			$subsite = DataObject::get_by_id('Subsite', $this->SubsiteID);
-			if ($subsite && $subsite->Theme) {
-				$theme = $subsite->Theme;
-			}
-			SSViewer::set_theme($theme);
-			Config::inst()->update('SSViewer', 'theme_enabled', true);
-
-			$email->setTemplate('MessageEmail');
-			$email->populateTemplate($templateData);
-
-			// Send email and handle result
-			$result = $email->send();
-			if($result) {
-				return true;
-			} else {
-				return 'Failed to send email - email service returned false';
-			}
-			
-		} catch(Exception $e) {
+			// Create and send email
+			return $this->createAndSendEmail($siteConfig, $recipient);
+		} catch (Exception $e) {
 			return 'Email sending failed with exception: ' . $e->getMessage();
 		}
 	}
-	public function sendPushNotification() {
-		
+
+	/**
+	 * Validate all requirements for sending email
+	 * @return true|string Returns true if valid, error message if not
+	 */
+	protected function validateEmailRequirements()
+	{
+		// Validate SubsiteID exists (0 is valid for main site)
+		if ($this->SubsiteID === null || $this->SubsiteID === '') {
+			return 'Cannot send email: No Subsite selected for this message';
+		}
+
+		// Get site configuration
+		$siteConfig = SiteConfig::get()->filter('SubsiteID', $this->SubsiteID)->first();
+
+		if (!$siteConfig) {
+			return 'Cannot send email: Site configuration not found for SubsiteID ' . $this->SubsiteID;
+		}
+
+		// Validate DefaultFromEmail exists
+		$defaultFromEmail = $siteConfig->DefaultFromEmail;
+		if (!$defaultFromEmail) {
+			return 'Cannot send email: No default from email address configured for this site';
+		}
+
+		// Validate recipient
+		$recipient = $this->Member();
+		if (!$recipient || !$recipient->exists()) {
+			return 'Cannot send email: No valid recipient found';
+		}
+
+		if (!$recipient->Email) {
+			return 'Cannot send email: No recipient email address';
+		}
+
+		return true;
+	}
+
+	/**
+	 * Create and send the email
+	 * @param SiteConfig $siteConfig
+	 * @param Member $recipient
+	 * @return true|string Returns true if sent, error message if failed
+	 */
+	protected function createAndSendEmail($siteConfig, $recipient)
+	{
+		// Create and configure email
+		$email = new Email();
+		$email->setFrom($siteConfig->DefaultFromEmail);
+		$email->setTo($recipient->Email);
+		$email->setSubject($this->Title);
+
+		// Get template data
+		$templateData = $this->buildEmailTemplateData($recipient);
+
+		// Set theme for email templates if one is determined
+		$theme = $this->getTheme();
+		if ($theme) {
+			SSViewer::set_theme($theme);
+			Config::inst()->update('SSViewer', 'theme_enabled', true);
+		}
+
+		// Set template and populate
+		$email->setTemplate('MessageEmail');
+		$email->populateTemplate($templateData);
+
+		// Send email and handle result
+		$result = $email->send();
+		if ($result) {
+			return true;
+		} else {
+			return 'Failed to send email - email service returned false';
+		}
+	}
+
+	/**
+	 * Build template data array for email
+	 * @param Member $recipient
+	 * @return array
+	 */
+	protected function buildEmailTemplateData($recipient)
+	{
+		return [
+			'FirstName' => $recipient->FirstName,
+			'Surname' => $recipient->Surname,
+			'Body' => $this->Body,
+			'Image' => $this->Image(),
+			'Video' => $this->Video()
+		];
+	}
+
+	/**
+	 * Get the appropriate theme for email rendering
+	 * @return string
+	 */
+	protected function getTheme()
+	{
+		// First check if subsite has a specific theme
+		$subsite = DataObject::get_by_id('Subsite', $this->SubsiteID);
+		if ($subsite && $subsite->Theme) {
+			return $subsite->Theme;
+		}
+
+		// Try to get the currently active theme
+		$currentTheme = Config::inst()->get('SSViewer', 'theme');
+		if ($currentTheme) {
+			return $currentTheme;
+		}
+
+		// If no theme found, return null to use framework defaults
+		return null;
+	}
+
+	public function sendPushNotification()
+	{
+
 		$recipient = $this->Member();
 
 		if (!$recipient || !$recipient->PushNotificationToken) {
 			return false;
 		}
 
-		// Path to your service account JSON file
-		$serviceAccountFile = BASE_PATH . '/app/garia-app-4e6f084e2a08.json';
+		// Get Firebase configuration
+		$projectId = $this->config()->get('firebase_project_id');
+		$serviceAccountFile = $this->config()->get('firebase_service_account_path');
+
+		if (!$projectId || !$serviceAccountFile) {
+			return false;
+		}
+
+		// Fallback to BASE_PATH if relative path
+		if (substr($serviceAccountFile, 0, 1) !== '/') {
+			$serviceAccountFile = BASE_PATH . '/' . $serviceAccountFile;
+		}
+
+		if (!file_exists($serviceAccountFile)) {
+			return false;
+		}
 
 		// Get Google OAuth2 access token
 		$accessToken = $this->getGoogleAccessToken($serviceAccountFile);
@@ -263,9 +371,6 @@ class Message extends DataObject {
 		if (!$accessToken) {
 			return false;
 		}
-
-		// Your Firebase project ID
-		$projectId = 'garia-app'; // Replace with your project ID
 
 		$url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
@@ -276,11 +381,13 @@ class Message extends DataObject {
 			])
 			->count();
 
+		$notificationTitle = $this->config()->get('push_notification_title');
+
 		$message = [
 			'message' => [
 				'token' => $recipient->PushNotificationToken,
 				'notification' => [
-					'title' => 'New Message from Garia',
+					'title' => $notificationTitle,
 					'body' => $this->Title,
 				],
 				'data' => [
@@ -293,7 +400,7 @@ class Message extends DataObject {
 							'badge' => $unreadMessages
 						]
 					]
-				]				
+				]
 			]
 		];
 
@@ -322,9 +429,25 @@ class Message extends DataObject {
 	}
 
 	/**
+	 * Determine if Firebase push is configured
+	 */
+	public static function isPushNotificationsConfigured()
+	{
+		$projectId = Config::inst()->get('Message', 'firebase_project_id');
+		$serviceAccountFile = Config::inst()->get('Message', 'firebase_service_account_path');
+
+		// Check if values exist and are not placeholder values
+		return !empty($projectId) &&
+			!empty($serviceAccountFile) &&
+			$projectId !== 'your-firebase-project-id' &&
+			$projectId !== 'your-project-id';
+	}
+
+	/**
 	 * Get Google OAuth2 access token from service account JSON
 	 */
-	protected function getGoogleAccessToken($serviceAccountFile) {
+	protected function getGoogleAccessToken($serviceAccountFile)
+	{
 		$jwtHeader = ['alg' => 'RS256', 'typ' => 'JWT'];
 		$now = time();
 		$serviceAccount = json_decode(file_get_contents($serviceAccountFile), true);
@@ -337,7 +460,7 @@ class Message extends DataObject {
 			'exp' => $now + 3600,
 		];
 
-		$base64UrlEncode = function($data) {
+		$base64UrlEncode = function ($data) {
 			return rtrim(strtr(base64_encode(json_encode($data)), '+/', '-_'), '=');
 		};
 
@@ -363,7 +486,8 @@ class Message extends DataObject {
 		$json = json_decode($result, true);
 		return isset($json['access_token']) ? $json['access_token'] : null;
 	}
-	public function onAfterSerialize(&$formattedDataObjectMap) {
+	public function onAfterSerialize(&$formattedDataObjectMap)
+	{
 		$formattedDataObjectMap['SentAgo'] = $this->dbObject('DateSent')->Ago();
 		$formattedDataObjectMap['SentShort'] = $this->dbObject('DateSent')->Ago();
 	}

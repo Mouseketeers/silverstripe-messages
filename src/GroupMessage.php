@@ -11,7 +11,7 @@ class GroupMessage extends DataObject
 		'Title' => 'Varchar(100)',
 		'Body' => 'HTMLText',
 		'SendEmail' => 'Boolean',
-		'SendPushNoticification' => 'Boolean',
+		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'Label' => 'Varchar(50)'
 	];
@@ -32,14 +32,14 @@ class GroupMessage extends DataObject
 
 	private static $defaults = [
 		'SendEmail' => true,
-		'SendPushNoticification' => false,
+		'SendPushNotification' => false,
 		'IsSent' => false,
 	];
 
 	private static $field_labels = [
 		'SendEmail' => 'Send Messages as Emails',
-		'SendPushNoticification' => 'Send Messages as Push Notifications',
-	];	
+		'SendPushNotification' => 'Send Push Notifications to App Users',
+	];
 
 	private static $default_sort = 'Created DESC';
 
@@ -73,7 +73,7 @@ class GroupMessage extends DataObject
 
 		$groups = Group::get();
 		if ($groups) {
-			$groupsMap = array();
+			$groupsMap = [];
 			foreach ($groups as $group) {
 				$groupsMap[$group->ID] = $group->getBreadcrumbs(' > ');
 			}
@@ -117,24 +117,29 @@ class GroupMessage extends DataObject
 			$config->addComponent(new GridFieldDeleteAction());
 		}
 
+		// Hide push notification toggle if Firebase is not configured
+		if (!Message::isPushNotificationsConfigured()) {
+			$fields->removeByName('SendPushNotification');
+		}
+
 		$fields->addFieldToTab(
 			'Root.Main',
 			TextField::create(
 				'Label',
 				'Label (optional)',
 				$this->Label
-			)->setDescription('Used for automated messages sent on specific occations, such as a new user registration.')
+			)->setDescription('Used for automated messages sent on specific occasions, such as a new user registration.')
 		);
 		return $fields;
 	}
 	public function getCMSValidator()
 	{
 		$requiredFields = RequiredFields::create(
-			array(
+			[
 				'Title',
 				'Body',
 				'Groups'
-			)
+			]
 		);
 		if (class_exists('Subsite')) {
 			$requiredFields->addRequiredField('SubsiteID');
@@ -164,32 +169,32 @@ class GroupMessage extends DataObject
 			'emails_failed' => 0,
 			'push_notifications_sent' => 0
 		];
-		
+
 		if ($this->Groups()->exists()) {
 			$groups = $this->Groups();
-			$existingMessages = $this->Messages()->column('MemberID');
+			// $existingMessages = $this->Messages()->column('MemberID');
 			foreach ($groups as $group) {
 				$members = $group->Members();
 				foreach ($members as $member) {
-					if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
+					// if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
 						$result = $this->processMessageToMember($member);
-						if($result) {
+						if ($result) {
 							$stats['messages_created']++;
-							if($result['email_sent']) {
+							if ($result['email_sent']) {
 								$stats['emails_sent']++;
-							} elseif($result['email_attempted']) {
+							} elseif ($result['email_attempted']) {
 								$stats['emails_failed']++;
 							}
-							if($result['push_sent']) {
+							if ($result['push_sent']) {
 								$stats['push_notifications_sent']++;
 							}
 						}
 						sleep(1);
-					}
+					// }
 				}
 			}
 		}
-		
+
 		return $stats;
 	}
 
@@ -201,23 +206,23 @@ class GroupMessage extends DataObject
 			$pushResult = null;
 			$emailAttempted = false;
 			$pushAttempted = false;
-			
+
 			// Process the message and capture results
-			if($message->SendEmail) {
+			if ($message->SendEmail) {
 				$emailAttempted = true;
 				$emailResult = $message->sendEmail();
 			}
-			
-			if($message->SendPushNoticification) {
+
+			if ($message->SendPushNotification) {
 				$pushAttempted = true;
 				$pushResult = $message->sendPushNotification();
 			}
-			
+
 			// Mark as sent and save
 			$message->IsSent = true;
 			$message->DateSent = SS_Datetime::now()->Rfc2822();
 			$message->write();
-			
+
 			return [
 				'message' => $message,
 				'email_sent' => $emailResult === true,
@@ -243,7 +248,7 @@ class GroupMessage extends DataObject
 		$message->ImageID = $this->ImageID;
 		$message->VideoID = $this->VideoID;
 		$message->SendEmail = $this->SendEmail;
-		$message->SendPushNoticification = $this->SendPushNoticification;
+		$message->SendPushNotification = $this->SendPushNotification;
 		$message->SubsiteID = $this->SubsiteID;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),

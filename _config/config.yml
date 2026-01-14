@@ -1,3 +1,15 @@
 ---
 Name: messages
 ---
+
+# Register the extension for ModelAdmin forms
+GridFieldDetailForm_ItemRequest:
+  extensions:
+    - MessageDetailFormExtension
+
+# Message configuration
+#Message:
+  # Firebase Push Notification Settings
+  # firebase_project_id: 'your-project-id'
+  # firebase_service_account_path: 'app/firebase-service-account.json'
+  # push_notification_title: 'New Message'
