@@ -10,10 +10,11 @@ class GroupMessage extends DataObject
 	private static $db = [
 		'Title' => 'Varchar(100)',
 		'Body' => 'HTMLText',
-		'SendEmail' => 'Boolean',
+		'SendAsEmail' => 'Boolean',
 		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
-		'Label' => 'Varchar(50)'
+		'Label' => 'Varchar(50)',
+		'FromEmail' => 'Varchar(255)'
 	];
 
 	private static $has_one = [
@@ -31,20 +32,20 @@ class GroupMessage extends DataObject
 	];
 
 	private static $defaults = [
-		'SendEmail' => true,
+		'SendAsEmail' => true,
 		'SendPushNotification' => false,
 		'IsSent' => false,
 	];
 
 	private static $field_labels = [
-		'SendEmail' => 'Send Messages as Emails',
+		'SendAsEmail' => 'Send Messages as Emails',
 		'SendPushNotification' => 'Send Push Notifications to App Users',
 	];
 
 	private static $default_sort = 'Created DESC';
 
 	private static $summary_fields = [
-		'Subsite.Title' => 'Site',
+		'SummarySubsiteTitle' => 'Site',
 		'Title',
 		'Created.Nice' => 'Created'
 	];
@@ -60,6 +61,14 @@ class GroupMessage extends DataObject
 		}
 		parent::populateDefaults();
 	}
+
+	public function getSummarySubsiteTitle()
+	{
+		if ($this->SubsiteID == 0) {
+			return 'Main Site';
+		}
+		return $this->Subsite()->Title;
+	}	
 
 	public function getCMSFields()
 	{
@@ -117,6 +126,24 @@ class GroupMessage extends DataObject
 			$config->addComponent(new GridFieldDeleteAction());
 		}
 
+		// Add FromEmail dropdown
+		$fromEmails = Config::inst()->get('Messages', 'from_emails');
+		if ($fromEmails && count($fromEmails) > 0) {
+			// Convert array to key-value pairs for dropdown
+			$emailOptions = [];
+			foreach ($fromEmails as $email) {
+				$emailOptions[$email] = $email;
+			}
+			$fields->insertAfter(
+				'SubsiteID',
+				DropdownField::create(
+					'FromEmail',
+					'From Email',
+					$emailOptions
+				)->setEmptyString('None')
+			);
+		}
+
 		// Hide push notification toggle if Firebase is not configured
 		if (!Message::isPushNotificationsConfigured()) {
 			$fields->removeByName('SendPushNotification');
@@ -134,17 +161,13 @@ class GroupMessage extends DataObject
 	}
 	public function getCMSValidator()
 	{
-		$requiredFields = RequiredFields::create(
+		return MessageFormValidator::create(
 			[
 				'Title',
 				'Body',
 				'Groups'
 			]
 		);
-		if (class_exists('Subsite')) {
-			$requiredFields->addRequiredField('SubsiteID');
-		}
-		return $requiredFields;
 	}
 
 	public function process($data = null, $form = null)
@@ -167,16 +190,17 @@ class GroupMessage extends DataObject
 			'messages_created' => 0,
 			'emails_sent' => 0,
 			'emails_failed' => 0,
-			'push_notifications_sent' => 0
+			'push_notifications_sent' => 0,
+			'existing_messages' => 0
 		];
 
 		if ($this->Groups()->exists()) {
 			$groups = $this->Groups();
-			// $existingMessages = $this->Messages()->column('MemberID');
+			$existingMessages = $this->Messages()->column('MemberID');
 			foreach ($groups as $group) {
 				$members = $group->Members();
 				foreach ($members as $member) {
-					// if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
+					if (!$existingMessages || !in_array($member->ID, $existingMessages)) {
 						$result = $this->processMessageToMember($member);
 						if ($result) {
 							$stats['messages_created']++;
@@ -190,7 +214,9 @@ class GroupMessage extends DataObject
 							}
 						}
 						sleep(1);
-					// }
+					} else {
+						$stats['existing_messages']++;
+					}
 				}
 			}
 		}
@@ -208,7 +234,7 @@ class GroupMessage extends DataObject
 			$pushAttempted = false;
 
 			// Process the message and capture results
-			if ($message->SendEmail) {
+			if ($message->SendAsEmail) {
 				$emailAttempted = true;
 				$emailResult = $message->sendEmail();
 			}
@@ -247,9 +273,10 @@ class GroupMessage extends DataObject
 		$message->Title = $this->Title;
 		$message->ImageID = $this->ImageID;
 		$message->VideoID = $this->VideoID;
-		$message->SendEmail = $this->SendEmail;
+		$message->SendAsEmail = $this->SendAsEmail;
 		$message->SendPushNotification = $this->SendPushNotification;
 		$message->SubsiteID = $this->SubsiteID;
+		$message->FromEmail = $this->FromEmail;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),
 			ArrayData::create([

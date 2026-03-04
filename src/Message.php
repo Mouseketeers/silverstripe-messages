@@ -19,10 +19,11 @@ class Message extends DataObject
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
 		'IsRead' => 'Boolean',
-		'SendEmail' => 'Boolean',
+		'SendAsEmail' => 'Boolean',
 		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
-		'DateSent' => 'SS_Datetime'
+		'DateSent' => 'SS_Datetime',
+		'FromEmail' => 'Varchar(255)'
 	];
 
 	private static $has_one = [
@@ -49,13 +50,13 @@ class Message extends DataObject
 	];
 
 	private static $defaults = [
-		'SendEmail' => true,
+		'SendAsEmail' => true,
 		'SendPushNotification' => false,
 		'IsSent' => false,
 	];
 
 	private static $field_labels = [
-		'SendEmail' => 'Send Message as Email',
+		'SendAsEmail' => 'Send Message as Email',
 		'SendPushNotification' => 'Send Push Notification to App Users',
 	];
 
@@ -93,6 +94,15 @@ class Message extends DataObject
 		$fields->removeByName('IsSent');
 		$fields->removeByName('GroupMessageID');
 		$fields->removeByName('MemberID');
+
+		// // Configure HTMLEditor to disable default editor CSS
+		// $bodyField = $fields->dataFieldByName('Body');
+		// if ($bodyField) {
+		// 	$config = HtmlEditorConfig::get('message_editor');
+		// 	$config->setOption('content_css', '');
+		// 	// $bodyField->setRows(20);
+		// 	$bodyField->setAttribute('data-config', 'message_editor');
+		// }
 
 		if ($this->IsSent) {
 			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
@@ -145,6 +155,24 @@ class Message extends DataObject
 			$fields->removeByName('SubsiteID');
 		}
 
+		// Add FromEmail dropdown
+		$fromEmails = Config::inst()->get('Messages', 'from_emails');
+		if ($fromEmails && count($fromEmails) > 0) {
+			// Convert array to key-value pairs for dropdown
+			$emailOptions = [];
+			foreach ($fromEmails as $email) {
+				$emailOptions[$email] = $email;
+			}
+			$fields->insertBefore(
+				'SubsiteID',
+				DropdownField::create(
+					'FromEmail',
+					'From Email',
+					$emailOptions
+				)->setEmptyString('None')
+			);
+		}
+
 		// Hide push notification toggle if Firebase is not configured
 		if (!self::isPushNotificationsConfigured()) {
 			$fields->removeByName('SendPushNotification');
@@ -155,17 +183,13 @@ class Message extends DataObject
 
 	public function getCMSValidator()
 	{
-		$requiredFields = RequiredFields::create(
+		return MessageFormValidator::create(
 			array(
 				'Title',
 				'Body',
 				'MemberID'
 			)
 		);
-		if (class_exists('Subsite')) {
-			$requiredFields->addRequiredField('SubsiteID');
-		}
-		return $requiredFields;
 	}
 
 	public function process($data = null, $form = null)
@@ -179,7 +203,7 @@ class Message extends DataObject
 		$this->write();
 
 		if ($this->Member()->exists()) {
-			if ($this->SendEmail) {
+			if ($this->SendAsEmail) {
 				$emailResult = $this->sendEmail();
 				if ($emailResult !== true) {
 					// Log error and potentially show user feedback
@@ -217,11 +241,35 @@ class Message extends DataObject
 			}
 
 			// Get validated data
-			$siteConfig = SiteConfig::get()->filter('SubsiteID', $this->SubsiteID)->first();
 			$recipient = $this->Member();
 
-			// Create and send email
-			return $this->createAndSendEmail($siteConfig, $recipient);
+			// Create and configure email
+			$email = new Email();
+			$email->setFrom($this->FromEmail);
+			$email->setTo($recipient->Email);
+			$email->setSubject($this->Title);
+
+			// Get template data
+			$templateData = $this->buildEmailTemplateData($recipient);
+
+			// Set theme for email templates if one is determined
+			$theme = $this->getTheme();
+			if ($theme) {
+				SSViewer::set_theme($theme);
+				Config::inst()->update('SSViewer', 'theme_enabled', true);
+			}
+
+			// Set template and populate
+			$email->setTemplate('MessageEmail');
+			$email->populateTemplate($templateData);
+
+			// Send email and handle result
+			$result = $email->send();
+			if ($result) {
+				return true;
+			} else {
+				return 'Failed to send email - email service returned false';
+			}
 		} catch (Exception $e) {
 			return 'Email sending failed with exception: ' . $e->getMessage();
 		}
@@ -238,17 +286,9 @@ class Message extends DataObject
 			return 'Cannot send email: No Subsite selected for this message';
 		}
 
-		// Get site configuration
-		$siteConfig = SiteConfig::get()->filter('SubsiteID', $this->SubsiteID)->first();
-
-		if (!$siteConfig) {
-			return 'Cannot send email: Site configuration not found for SubsiteID ' . $this->SubsiteID;
-		}
-
-		// Validate DefaultFromEmail exists
-		$defaultFromEmail = $siteConfig->DefaultFromEmail;
-		if (!$defaultFromEmail) {
-			return 'Cannot send email: No default from email address configured for this site';
+		// Validate FromEmail is set
+		if (!$this->FromEmail) {
+			return 'Cannot send email: No from email address specified';
 		}
 
 		// Validate recipient
@@ -265,53 +305,33 @@ class Message extends DataObject
 	}
 
 	/**
-	 * Create and send the email
-	 * @param SiteConfig $siteConfig
-	 * @param Member $recipient
-	 * @return true|string Returns true if sent, error message if failed
-	 */
-	protected function createAndSendEmail($siteConfig, $recipient)
-	{
-		// Create and configure email
-		$email = new Email();
-		$email->setFrom($siteConfig->DefaultFromEmail);
-		$email->setTo($recipient->Email);
-		$email->setSubject($this->Title);
-
-		// Get template data
-		$templateData = $this->buildEmailTemplateData($recipient);
-
-		// Set theme for email templates if one is determined
-		$theme = $this->getTheme();
-		if ($theme) {
-			SSViewer::set_theme($theme);
-			Config::inst()->update('SSViewer', 'theme_enabled', true);
-		}
-
-		// Set template and populate
-		$email->setTemplate('MessageEmail');
-		$email->populateTemplate($templateData);
-
-		// Send email and handle result
-		$result = $email->send();
-		if ($result) {
-			return true;
-		} else {
-			return 'Failed to send email - email service returned false';
-		}
-	}
-
-	/**
 	 * Build template data array for email
 	 * @param Member $recipient
 	 * @return array
 	 */
 	protected function buildEmailTemplateData($recipient)
 	{
+		// Parse shortcodes with correct domain for emails
+		$parsedBody = $this->Body;
+		if (class_exists('Subsite')) {
+			$subsite = DataObject::get_by_id('Subsite', $this->SubsiteID);
+			if ($subsite && $subsite->PrimaryDomain) {
+				// Temporarily set the base URL for shortcode parsing
+				$originalBaseURL = Director::baseURL();
+				Director::setBaseURL('http://' . $subsite->PrimaryDomain . '/');
+				$parsedBody = ShortcodeParser::get_active()->parse($this->Body);
+				Director::setBaseURL($originalBaseURL);
+			} else {
+				$parsedBody = ShortcodeParser::get_active()->parse($this->Body);
+			}
+		} else {
+			$parsedBody = ShortcodeParser::get_active()->parse($this->Body);
+		}
+
 		return [
 			'FirstName' => $recipient->FirstName,
 			'Surname' => $recipient->Surname,
-			'Body' => $this->Body,
+			'Body' => $parsedBody,
 			'Image' => $this->Image(),
 			'Video' => $this->Video()
 		];

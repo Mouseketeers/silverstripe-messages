@@ -68,9 +68,9 @@ class ProcessMessagesJob extends AbstractQueuedJob
 
         // Build completion message
         $messages = [];
-        if ($stats['emails_sent'] > 0) {
-            $messages[] = sprintf('%d emails sent successfully', $stats['emails_sent']);
-        }
+		if ($stats['existing_messages'] > 0) {
+			$messages[] = sprintf('%d messages already posted', $stats['existing_messages']);
+		}
         if ($stats['emails_failed'] > 0) {
             $messages[] = sprintf('%d emails failed to send', $stats['emails_failed']);
         }
