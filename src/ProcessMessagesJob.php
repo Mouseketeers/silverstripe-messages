@@ -6,6 +6,7 @@ use Symbiote\QueuedJobs\Services\AbstractQueuedJob;
 
 class ProcessMessagesJob extends AbstractQueuedJob
 {
+    public $GroupMessage;
     private $title = 'Process Messages';
     public function getTitle()
     {

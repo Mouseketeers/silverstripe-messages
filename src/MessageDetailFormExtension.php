@@ -3,22 +3,30 @@
 namespace Mouseketeers\Messages;
 
 use SilverStripe\Core\Extension;
-use SilverStripe\Control\Controller;
 
 class MessageDetailFormExtension extends Extension {
+
+    public function updateAllowedActions(&$actions) {
+        $actions[] = 'doSend';
+    }
     
     public function doSend($data, $form) {
         
         $record = $form->getRecord();
 
-        if ($record && $record->hasMethod('process')) {
-            $result = $record->process($data, $form);
-            if ($result) {
-                $form->sessionMessage('Message sent successfully!', 'good');
-            } else {
-                $form->sessionMessage('Failed to send message.', 'bad');
+        try {
+            if ($record && $record->hasMethod('process')) {
+                $result = $record->process($data, $form);
+                if ($result) {
+                    $form->sessionMessage('Message sent successfully!', 'good');
+                } else {
+                    $form->sessionMessage('Failed to send message.', 'bad');
+                }
             }
         }
-        return Controller::curr()->redirect($form->controller->Link());
+        catch (\Throwable $exception) {
+            $form->sessionMessage('Failed to send message.', 'bad');
+        }
+        return $form->getController()->redirect($form->getController()->Link());
     }
 }

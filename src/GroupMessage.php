@@ -11,6 +11,8 @@ use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\ListboxField;
 use SilverStripe\Forms\TextField;
 use SilverStripe\Forms\RequiredFields;
+use SilverStripe\Forms\GridField\GridFieldAddExistingAutocompleter;
+use SilverStripe\Forms\GridField\GridFieldAddNewButton;
 use SilverStripe\Forms\GridField\GridFieldDeleteAction;
 use SilverStripe\View\SSViewer;
 use SilverStripe\View\Parsers\ShortcodeParser;
@@ -91,7 +93,6 @@ class GroupMessage extends DataObject
 			$fields->insertBefore(
 				'Title',
 				ListboxField::create('Groups', 'Recipients')
-					->setMultiple(true)
 					->setSource($groupsMap)
 					->setAttribute(
 						'data-placeholder',
@@ -118,11 +119,11 @@ class GroupMessage extends DataObject
 		if ($messagesField = $fields->dataFieldByName('Messages')) {
 			$config = $messagesField->getConfig();
 			// Remove the "Add New" button
-			$config->removeComponentsByType('GridFieldAddNewButton');
+			$config->removeComponentsByType(GridFieldAddNewButton::class);
 			// Remove the "Add Existing" button
-			$config->removeComponentsByType('GridFieldAddExistingAutocompleter');
+			$config->removeComponentsByType(GridFieldAddExistingAutocompleter::class);
 			// Remove the unlink action
-			$config->removeComponentsByType('GridFieldDeleteAction');
+			$config->removeComponentsByType(GridFieldDeleteAction::class);
 			// Add the delete action
 			$config->addComponent(new GridFieldDeleteAction());
 		}

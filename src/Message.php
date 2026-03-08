@@ -170,15 +170,28 @@ class Message extends DataObject {
 	public function sendEmail() {
 
 		$siteConfig = SiteConfig::current_site_config();
-		$defaultFromEmail = $siteConfig->DefaultFromEmail;
+		$defaultFromEmail = $this->extractEmailAddress($siteConfig->DefaultFromEmail);
 		$recipient = $this->Member();
+		$recipientEmail = $this->extractEmailAddress($recipient->Email);
+
+		if(!$defaultFromEmail || !$recipientEmail) {
+			Injector::inst()->get(LoggerInterface::class)->warning(
+				'Message email could not be sent due to invalid sender or recipient email address',
+				[
+					'MessageID' => $this->ID,
+					'DefaultFromEmail' => $siteConfig->DefaultFromEmail,
+					'RecipientEmail' => $recipient ? $recipient->Email : null,
+				]
+			);
+			return false;
+		}
 
 		if($defaultFromEmail) {
 			$email = Email::create()
 				->setFrom($defaultFromEmail)
-				->setTo($recipient->Email)
+				->setTo($recipientEmail)
 				->setSubject($this->Title)
-				->setHTMLTemplate('MessageEmail'); // Changed from setTemplate
+				->setHTMLTemplate('Email/MessageEmail');
 
 			$templateData = array(
 				'FirstName' => $recipient->FirstName,
@@ -190,8 +203,41 @@ class Message extends DataObject {
 
 			$email->setData($templateData); // Changed from populateTemplate
 
-			return $email->send();
+			try {
+				return $email->send();
+			}
+			catch (\Throwable $exception) {
+				Injector::inst()->get(LoggerInterface::class)->error(
+					'Failed sending message email',
+					[
+						'MessageID' => $this->ID,
+						'Exception' => $exception->getMessage(),
+					]
+				);
+				return false;
+			}
 		}
+
+		return false;
+	}
+
+	protected function extractEmailAddress($address)
+	{
+		if (!$address) {
+			return null;
+		}
+
+		$address = trim((string)$address);
+
+		if (preg_match('/<([^>]+)>/', $address, $matches)) {
+			$address = trim($matches[1]);
+		}
+
+		if (filter_var($address, FILTER_VALIDATE_EMAIL)) {
+			return $address;
+		}
+
+		return null;
 	}
 	public function sendPushNotification() {
 		
