@@ -20,12 +20,7 @@
         "silverstripe/framework": "^4.0",
         "silverstripe/admin": "^1.0",
         "silverstripe/assets": "^1.0",
-        "silverstripe/subsites": "^2.0",
         "symbiote/silverstripe-queuedjobs": "^4.0"
-    },
-    "suggest": {
-        "silverstripe/subsites": "For multi-site message management",
-        "symbiote/silverstripe-queuedjobs": "For background message processing"
     },
     "minimum-stability": "stable",
 	"extra": {

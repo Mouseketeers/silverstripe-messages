@@ -1,0 +1,12 @@
+---
+Name: messages-subsites
+Only:
+  moduleexists: 'silverstripe/subsites'
+---
+Mouseketeers\Messages\Message:
+  extensions:
+    - Mouseketeers\Messages\MessageSubsitesExtension
+
+Mouseketeers\Messages\GroupMessage:
+  extensions:
+    - Mouseketeers\Messages\GroupMessageSubsitesExtension

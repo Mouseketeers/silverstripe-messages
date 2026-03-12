@@ -3,6 +3,7 @@
 namespace Mouseketeers\Messages;
 
 use SilverStripe\Core\Extension;
+use SilverStripe\Core\Injector\Injector;
 
 class MessageDetailFormExtension extends Extension {
 
@@ -15,17 +16,15 @@ class MessageDetailFormExtension extends Extension {
         $record = $form->getRecord();
 
         try {
-            if ($record && $record->hasMethod('process')) {
-                $result = $record->process($data, $form);
-                if ($result) {
-                    $form->sessionMessage('Message sent successfully!', 'good');
-                } else {
-                    $form->sessionMessage('Failed to send message.', 'bad');
-                }
+            $result = $record->process($data, $form);
+            if ($result) {
+                $form->sessionMessage('Message sent successfully!', 'good');
+            } else {
+                $form->sessionMessage('Failed to send message.', 'bad');
             }
         }
         catch (\Throwable $exception) {
-            $form->sessionMessage('Failed to send message.', 'bad');
+            $form->sessionMessage('Failed to send message: ' . $exception->getMessage(), 'bad');
         }
         return $form->getController()->redirect($form->getController()->Link());
     }

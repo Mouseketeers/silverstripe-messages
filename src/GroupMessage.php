@@ -41,8 +41,7 @@ class GroupMessage extends DataObject
 
 	private static $has_one = [
 		'Image' => Image::class,
-		'Video' => File::class,
-		'Subsite' => Subsite::class
+		'Video' => File::class
 	];
 
 	private static $many_many = [
@@ -57,20 +56,22 @@ class GroupMessage extends DataObject
 
 	private static $summary_fields = [
 		'Title',
-		'Created.Nice' => 'Created',
-		'Subsite.Title' => 'Site',
+		'Created.Nice' => 'Created'
 	];
 
 	private static $indexes = [
 		'Label' => true,
 	];
 
-	public function populateDefaults()
+	public function summaryFields()
 	{
-		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
-			$this->SubsiteID = Subsite::currentSubsiteID();
+		$fields = parent::summaryFields();
+
+		if (class_exists(Subsite::class) && $this->hasMethod('Subsite')) {
+			$fields['Subsite.Title'] = 'Site';
 		}
-		parent::populateDefaults();
+
+		return $fields;
 	}
 
 	public function getCMSFields()

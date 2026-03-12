@@ -4,9 +4,10 @@ namespace Mouseketeers\Messages;
 
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Security\Member;
-use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\Security\Security;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\Control\Email\Email;
+use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\ReadonlyField;
 use SilverStripe\Forms\RequiredFields;
@@ -14,6 +15,8 @@ use SilverStripe\ORM\FieldType\DBDatetime;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
 use SilverStripe\Core\Injector\Injector;
+use SilverStripe\Core\Config\Config;
+use SilverStripe\View\SSViewer;
 use Psr\Log\LoggerInterface;
 use Mouseketeers\Messages\GroupMessage;
 
@@ -31,31 +34,26 @@ class Message extends DataObject {
         'SendEmail' => 'Boolean',
         'SendPushNoticification' => 'Boolean',
 		'IsSent' => 'Boolean',
-		'DateSent' => 'Datetime' // Change from 'SS_Datetime'
+		'DateSent' => 'Datetime'
 	);
 
 	private static $has_one = array(
         'Member' => Member::class,
-		'GroupMessage' => GroupMessage::class, // Make sure GroupMessage is also namespaced
+		'GroupMessage' => GroupMessage::class,
 		'Image' => Image::class,
-		'Video' => File::class,
-		'Subsite' => Subsite::class
+		'Video' => File::class
 	);
 
     private static $summary_fields = [
 		'Recipient' => 'Recipient',
 		'Title' => 'Title',
-		'DateSent.Nice' => 'Sent',
-		'Subsite.Title' => 'Site'
+		'DateSent.Nice' => 'Sent'
 	];
 
 	private static $default_sort = 'DateSent DESC, Created DESC';
 
     public function populateDefaults()
     {
-        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
-            $this->SubsiteID = Subsite::currentSubsiteID();
-        }
 		$this->IsRead = false;
 		parent::populateDefaults();
 	}	
@@ -66,6 +64,7 @@ class Message extends DataObject {
 		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
 	}
+
 	public function getCMSFields() {
 		
 		$fields = parent::getCMSFields();
@@ -114,21 +113,22 @@ class Message extends DataObject {
 
 		}
 
+		if (class_exists(Subsite::class)) {
+			$fields->removeByName('SubsiteID');
+			$subsiteField = DropdownField::create(
+				'SubsiteID',
+				'Send from Site',
+				Subsite::all_sites()->map('ID', 'Title')
+			);
 
-        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
-            $subsites = Subsite::get();
-            $fields->insertBefore(
-                DropdownField::create(
-                    'SubsiteID', 
-                    'Send from Site', 
-                    $subsites->map('ID', 'Title')
-                ),
-                'MemberID'
-            );
-        }
-        else {
-            $fields->removeByName('SubsiteID');
-        }
+			if ($fields->dataFieldByName('MemberID')) {
+				$fields->insertBefore($subsiteField, 'MemberID');
+			} else {
+				$fields->addFieldToTab('Root.Main', $subsiteField);
+			}
+		} else {
+			$fields->removeByName('SubsiteID');
+		}
 
 		return $fields;
 	}
@@ -140,9 +140,9 @@ class Message extends DataObject {
 				'MemberID'
             )
         );
-        if(class_exists('SilverStripe\Subsites\Model\Subsite')) {
-            $requiredFields->addRequiredField('SubsiteID');
-        }
+		if (class_exists(Subsite::class)) {
+			$requiredFields->addRequiredField('SubsiteID');
+		}
         return $requiredFields;
 	}
 	
@@ -168,77 +168,58 @@ class Message extends DataObject {
 	}	
 	
 	public function sendEmail() {
+		
+		$originalThemeEnabled = (bool) Config::inst()->get(SSViewer::class, 'theme_enabled');
+		$originalThemes = SSViewer::get_themes() ?: [];
 
-		$siteConfig = SiteConfig::current_site_config();
-		$defaultFromEmail = $this->extractEmailAddress($siteConfig->DefaultFromEmail);
-		$recipient = $this->Member();
-		$recipientEmail = $this->extractEmailAddress($recipient->Email);
+		Config::modify()->set(SSViewer::class, 'theme_enabled', true);
 
-		if(!$defaultFromEmail || !$recipientEmail) {
-			Injector::inst()->get(LoggerInterface::class)->warning(
-				'Message email could not be sent due to invalid sender or recipient email address',
-				[
-					'MessageID' => $this->ID,
-					'DefaultFromEmail' => $siteConfig->DefaultFromEmail,
-					'RecipientEmail' => $recipient ? $recipient->Email : null,
-				]
-			);
-			return false;
-		}
+		try {
+			$this->extend('beforeSendMessageEmail');
 
-		if($defaultFromEmail) {
-			$email = Email::create()
-				->setFrom($defaultFromEmail)
-				->setTo($recipientEmail)
-				->setSubject($this->Title)
-				->setHTMLTemplate('Email/MessageEmail');
+			$fromEmail = self::config()->get('default_from_email');
+			if(!$fromEmail) {
+				$siteConfig = SiteConfig::current_site_config();
+				$fromEmail = $siteConfig->DefaultFromEmail ?? null;
+			}
+			if(!$fromEmail) {
+				$fromEmail = Email::config()->get('admin_email');
+			}
 
-			$templateData = array(
-				'FirstName' => $recipient->FirstName,
-				'Surname' => $recipient->Surname,
-				'Body' => $this->Body,
-				'Image' => $this->Image(),
-				'Video' => $this->Video()
-			);
+			$fromEmailAddress = $this->getEmailAddress($fromEmail);
+			$fromEmailName = $this->getFromEmailName($fromEmail);
 
-			$email->setData($templateData); // Changed from populateTemplate
+			$siteConfig = SiteConfig::current_site_config();
+			$defaultFromEmail = $siteConfig->DefaultFromEmail;
+			$recipient = $this->Member();
+		
 
-			try {
+			if($defaultFromEmail) {
+				$email = Email::create()
+					->setFrom($fromEmailAddress, $fromEmailName)
+					->setTo($recipient->Email)
+					->setSubject($this->Title)
+					->setHTMLTemplate('Email/MessageEmail');
+
+				$templateData = array(
+					'FirstName' => $recipient->FirstName,
+					'Surname' => $recipient->Surname,
+					'Body' => $this->dbObject('Body'),
+					'Image' => $this->Image(),
+					'Video' => $this->Video()
+				);
+
+				$email->setData($templateData);
 				return $email->send();
 			}
-			catch (\Throwable $exception) {
-				Injector::inst()->get(LoggerInterface::class)->error(
-					'Failed sending message email',
-					[
-						'MessageID' => $this->ID,
-						'Exception' => $exception->getMessage(),
-					]
-				);
-				return false;
-			}
-		}
 
-		return false;
+			return false;
+		} finally {
+			SSViewer::set_themes($originalThemes);
+			Config::modify()->set(SSViewer::class, 'theme_enabled', $originalThemeEnabled);
+		}
 	}
 
-	protected function extractEmailAddress($address)
-	{
-		if (!$address) {
-			return null;
-		}
-
-		$address = trim((string)$address);
-
-		if (preg_match('/<([^>]+)>/', $address, $matches)) {
-			$address = trim($matches[1]);
-		}
-
-		if (filter_var($address, FILTER_VALIDATE_EMAIL)) {
-			return $address;
-		}
-
-		return null;
-	}
 	public function sendPushNotification() {
 		
 		$recipient = $this->Member();
@@ -358,6 +339,46 @@ class Message extends DataObject {
 		$json = json_decode($result, true);
 		return isset($json['access_token']) ? $json['access_token'] : null;
 	}
+/**
+     * Parse the FromEmail field to extract just the email address
+     * Handles formats like "Name <email@domain.com>" or plain "email@domain.com"
+     */
+    public function getEmailAddress($email)
+    {
+        if (!$email) {
+            return null;
+        }
+
+        // Match email in angle brackets: "Name <email@domain.com>"
+        if (preg_match('/.*<([^>]+)>/', $email, $matches)) {
+            return trim($matches[1]);
+        }
+
+        // No angle brackets, assume it's just the email address
+        return trim($email);
+    }
+
+    /**
+     * Parse the FromEmail field to extract the display name
+     * Returns null if no name is provided (plain email format)
+     */
+    public function getFromEmailName($email)
+    {
+        if (!$email) {
+            return null;
+        }
+
+        // Match name before angle brackets: "Name <email@domain.com>"
+        if (preg_match('/^(.+)<[^>]+>$/', $email, $matches)) {
+            $name = trim($matches[1]);
+            // Remove surrounding quotes if present
+            $name = trim($name, '"\' ');
+            return $name ?: null;
+        }
+
+        // No angle brackets found, no separate name provided
+        return null;
+    }	
 	public function onAfterSerialize(&$formattedDataObjectMap) {
 		$formattedDataObjectMap['SentAgo'] = $this->dbObject('DateSent')->Ago();
 		$formattedDataObjectMap['SentShort'] = $this->dbObject('DateSent')->Ago();
