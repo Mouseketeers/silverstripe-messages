@@ -70,7 +70,10 @@ class MessageSubsitesExtension extends DataExtension
 
         $subsite = Subsite::get()->byID((int) $this->owner->SubsiteID);
         if ($subsite && $subsite->Theme) {
-            SSViewer::set_themes([$subsite->Theme]);
+            // Subsite theme first so its MessageEmail template takes priority;
+            // '$default' as fallback so the module's own template is still found
+            // when the subsite theme doesn't override it.
+            SSViewer::set_themes([$subsite->Theme, '$default']);
         }
     }
 }

@@ -4,3 +4,18 @@ Name: messages
 SilverStripe\Forms\GridField\GridFieldDetailForm_ItemRequest:
   extensions:
     - Mouseketeers\Messages\MessageDetailFormExtension
+
+# Optional project-level overrides (set these in the consuming project):
+# Mouseketeers\Messages\Service\MessageDispatcher:
+#   channel_classes:
+#     email: Mouseketeers\Messages\Channel\EmailChannel
+#
+# Mouseketeers\Messages\Message:
+#   default_channels:
+#     - email
+#
+# Mouseketeers\Messages\Channel\PushMessageChannel:
+#   firebase_project_id: 'your-firebase-project-id'
+#   service_account_file: 'app/your-firebase-service-account.json'
+#   notification_title: 'New Message'
+#   notification_url_pattern: '/message/{id}'

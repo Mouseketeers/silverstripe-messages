@@ -7,10 +7,12 @@ use SilverStripe\Security\Group;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
 use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\Forms\CheckboxSetField;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\ListboxField;
 use SilverStripe\Forms\TextField;
 use SilverStripe\Forms\RequiredFields;
+use Mouseketeers\Messages\Service\MessageDispatcher;
 use SilverStripe\Forms\GridField\GridFieldAddExistingAutocompleter;
 use SilverStripe\Forms\GridField\GridFieldAddNewButton;
 use SilverStripe\Forms\GridField\GridFieldDeleteAction;
@@ -36,6 +38,7 @@ class GroupMessage extends DataObject
 		'SendEmail' => 'Boolean',
 		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
+		'Channels' => 'Varchar(255)',
 		'Label' => 'Varchar(50)'
 	];
 
@@ -53,6 +56,8 @@ class GroupMessage extends DataObject
 	];
 
 	private static $default_sort = 'Created DESC';
+
+	private static $default_channels = [];
 
 	private static $summary_fields = [
 		'Title',
@@ -76,12 +81,14 @@ class GroupMessage extends DataObject
 
 	public function getCMSFields()
 	{
-
 		$fields = parent::getCMSFields();
 
 		$fields->removeByName('Groups');
 		$fields->removeByName('IsSent');
 		$fields->removeByName('Label');
+		$fields->removeByName('SendEmail');
+		$fields->removeByName('SendPushNotification');
+		$fields->removeByName('Channels');
 
 
 		$groups = Group::get();
@@ -129,13 +136,27 @@ class GroupMessage extends DataObject
 			$config->addComponent(new GridFieldDeleteAction());
 		}
 
+		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
+		$channelsMap = $dispatcher->getChannelsMap();
+		if ($channelsMap) {
+			$channelField = CheckboxSetField::create('Channels', 'Send via', $channelsMap);
+			$defaultChannels = $this->getConfiguredDefaultChannels();
+			if (empty($this->Channels) && !empty($defaultChannels)) {
+				$channelField->setValue($defaultChannels);
+			}
+			$fields->insertBefore(
+				'Title',
+				$channelField
+			);
+		}
+
 		$fields->addFieldToTab(
 			'Root.Main',
 			TextField::create(
 				'Label',
 				'Label (optional)',
 				$this->Label
-			)->setDescription('Used for automated messages sent on specific occations, such as a new user registration.')
+			)->setDescription('Used for automated messages sent on specific occasions, such as a new user registration.')
 		);
 		return $fields;
 	}
@@ -185,6 +206,16 @@ class GroupMessage extends DataObject
 		}
 	}
 
+	protected function getConfiguredDefaultChannels(): array
+	{
+		$configured = self::config()->get('default_channels') ?: [];
+		if (empty($configured)) {
+			$configured = Message::config()->get('default_channels') ?: [];
+		}
+
+		return $configured;
+	}
+
 	public function processMessageToMember($member)
 	{
 		$message = $this->createMessage($member);
@@ -207,6 +238,7 @@ class GroupMessage extends DataObject
 		$message->VideoID = $this->VideoID;
 		$message->SendEmail = $this->SendEmail;
 		$message->SendPushNotification = $this->SendPushNotification;
+		$message->Channels = $this->Channels ?: null;
 		$message->SubsiteID = $this->SubsiteID;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),

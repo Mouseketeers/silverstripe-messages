@@ -3,7 +3,7 @@
 namespace Mouseketeers\Messages;
 
 use SilverStripe\Core\Extension;
-use SilverStripe\Core\Injector\Injector;
+use Mouseketeers\Messages\Message;
 
 class MessageDetailFormExtension extends Extension {
 
@@ -20,7 +20,11 @@ class MessageDetailFormExtension extends Extension {
             if ($result) {
                 $form->sessionMessage('Message sent successfully!', 'good');
             } else {
-                $form->sessionMessage('Failed to send message.', 'bad');
+                if ($record instanceof Message && method_exists($record, 'getSendFailureReason')) {
+                    $form->sessionMessage('Failed to send message: ' . $record->getSendFailureReason(), 'bad');
+                } else {
+                    $form->sessionMessage('Failed to send message.', 'bad');
+                }
             }
         }
         catch (\Throwable $exception) {
