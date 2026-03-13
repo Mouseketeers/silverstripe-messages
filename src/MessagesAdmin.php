@@ -18,6 +18,11 @@ class MessagesAdmin extends ModelAdmin {
 
 	private static $menu_title = 'Messages';
 
+	public function subsiteCMSShowInMenu()
+	{
+		return true;
+	}
+
 	public function getEditForm($id = null, $fields = null) {
 	    $form = parent::getEditForm($id, $fields);
 

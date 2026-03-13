@@ -72,7 +72,6 @@ class Message extends DataObject {
 	}
 
 	public function getCMSFields() {
-		
 
 		$fields = parent::getCMSFields();
 
@@ -118,7 +117,7 @@ class Message extends DataObject {
 			}
 			$channelsMap = $dispatcher->getChannelsMap();
 			if ($channelsMap) {
-				$channelField = CheckboxSetField::create('Channels', 'Send via', $channelsMap);
+				$channelField = CheckboxSetField::create('Channels', 'Send as', $channelsMap);
 				$defaultChannels = self::config()->get('default_channels') ?: [];
 				if (empty($this->Channels) && !empty($defaultChannels)) {
 					$channelField->setValue($defaultChannels);
@@ -131,9 +130,7 @@ class Message extends DataObject {
 			$fields->insertBefore('Title',
 				ReadonlyField::create('Recipient', 'Recipient', $this->getRecipient())
 			);
-			$channels = is_array($this->Channels)
-				? $this->Channels
-				: (json_decode((string) $this->Channels, true) ?: []);
+			$channels = $this->getChannelsArray();
 			if ($channels) {
 				$map = $dispatcher->getChannelsMap();
 				$labels = [];
@@ -147,24 +144,6 @@ class Message extends DataObject {
 				);
 			}
 		}
-
-		if (class_exists(Subsite::class)) {
-			$fields->removeByName('SubsiteID');
-			$subsiteField = DropdownField::create(
-				'SubsiteID',
-				'Send from Site',
-				Subsite::all_sites()->map('ID', 'Title')
-			);
-
-			if ($fields->dataFieldByName('MemberID')) {
-				$fields->insertBefore($subsiteField, 'MemberID');
-			} else {
-				$fields->addFieldToTab('Root.Main', $subsiteField);
-			}
-		} else {
-			$fields->removeByName('SubsiteID');
-		}
-
 		return $fields;
 	}
 	public function getCMSValidator() {
@@ -186,9 +165,7 @@ class Message extends DataObject {
 		if($form) {
 			$form->saveInto($this);
 		}
-		$channels = is_array($this->Channels)
-			? $this->Channels
-			: (json_decode((string) $this->Channels, true) ?: []);
+		$channels = $this->getChannelsArray();
 
 		if($this->Member()->exists()) {
 			if (!empty($channels)) {
@@ -224,9 +201,7 @@ class Message extends DataObject {
 			return 'Recipient email address is invalid: ' . $member->Email;
 		}
 
-		$channels = is_array($this->Channels)
-			? $this->Channels
-			: (json_decode((string) $this->Channels, true) ?: []);
+		$channels = $this->getChannelsArray();
 		if (empty($channels)) {
 			return 'No send channels are selected.';
 		}
@@ -253,6 +228,16 @@ class Message extends DataObject {
 		}
 
 		return 'No channel reported a successful send. Check mail transport and logs.';
+	}
+
+	private function getChannelsArray(): array
+	{
+		if (is_array($this->Channels)) {
+			return $this->Channels;
+		}
+
+		$decoded = json_decode((string) $this->Channels, true);
+		return is_array($decoded) ? $decoded : [];
 	}
 
 

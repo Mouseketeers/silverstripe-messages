@@ -8,7 +8,6 @@ use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
 use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\Forms\CheckboxSetField;
-use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\ListboxField;
 use SilverStripe\Forms\TextField;
 use SilverStripe\Forms\RequiredFields;
@@ -68,17 +67,6 @@ class GroupMessage extends DataObject
 		'Label' => true,
 	];
 
-	public function summaryFields()
-	{
-		$fields = parent::summaryFields();
-
-		if (class_exists(Subsite::class) && $this->hasMethod('Subsite')) {
-			$fields['Subsite.Title'] = 'Site';
-		}
-
-		return $fields;
-	}
-
 	public function getCMSFields()
 	{
 		$fields = parent::getCMSFields();
@@ -109,20 +97,6 @@ class GroupMessage extends DataObject
 			);
 		}
 
-		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
-			$subsites = Subsite::get();
-			$fields->insertAfter(
-				DropdownField::create(
-					'SubsiteID',
-					'Site',
-					$subsites->map('ID', 'Title')
-				),
-				'Groups'
-			);
-		} else {
-			$fields->removeByName('SubsiteID');
-		}
-
 		// Modify the related Messages GridField
 		if ($messagesField = $fields->dataFieldByName('Messages')) {
 			$config = $messagesField->getConfig();
@@ -139,9 +113,9 @@ class GroupMessage extends DataObject
 		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
 		$channelsMap = $dispatcher->getChannelsMap();
 		if ($channelsMap) {
-			$channelField = CheckboxSetField::create('Channels', 'Send via', $channelsMap);
+			$channelField = CheckboxSetField::create('Channels', 'Send as', $channelsMap);
 			$defaultChannels = $this->getConfiguredDefaultChannels();
-			if (empty($this->Channels) && !empty($defaultChannels)) {
+			if (empty($this->getChannelsArray()) && !empty($defaultChannels)) {
 				$channelField->setValue($defaultChannels);
 			}
 			$fields->insertBefore(
@@ -238,7 +212,8 @@ class GroupMessage extends DataObject
 		$message->VideoID = $this->VideoID;
 		$message->SendEmail = $this->SendEmail;
 		$message->SendPushNotification = $this->SendPushNotification;
-		$message->Channels = $this->Channels ?: null;
+		$channels = $this->getChannelsArray();
+		$message->Channels = !empty($channels) ? json_encode($channels) : null;
 		$message->SubsiteID = $this->SubsiteID;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),
@@ -256,5 +231,15 @@ class GroupMessage extends DataObject
 		$job = Injector::inst()->create(ProcessMessagesJob::class);
 		$job->GroupMessage = $this;
 		singleton(QueuedJobService::class)->queueJob($job, date('Y-m-d H:i:s', time()));
+	}
+
+	private function getChannelsArray(): array
+	{
+		if (is_array($this->Channels)) {
+			return $this->Channels;
+		}
+
+		$decoded = json_decode((string) $this->Channels, true);
+		return is_array($decoded) ? $decoded : [];
 	}
 }

@@ -41,18 +41,12 @@ class MessageSubsitesExtension extends DataExtension
 
     public function updateCMSFields(FieldList $fields)
     {
-        // This hook can be called more than once during field construction.
-        if ($fields->dataFieldByName('SubsiteID')) {
-            return;
-        }
-
-        $subsites = Subsite::all_sites();
 
         $subsiteField = DropdownField::create(
             'SubsiteID',
             'Send from Site',
-            $subsites->map('ID', 'Title')
-        );
+            Subsite::all_sites()->map('ID', 'Title')
+        )->setEmptyString('Select site...');
 
         if ($fields->dataFieldByName('MemberID')) {
             $fields->insertBefore($subsiteField, 'MemberID');
@@ -70,9 +64,6 @@ class MessageSubsitesExtension extends DataExtension
 
         $subsite = Subsite::get()->byID((int) $this->owner->SubsiteID);
         if ($subsite && $subsite->Theme) {
-            // Subsite theme first so its MessageEmail template takes priority;
-            // '$default' as fallback so the module's own template is still found
-            // when the subsite theme doesn't override it.
             SSViewer::set_themes([$subsite->Theme, '$default']);
         }
     }
