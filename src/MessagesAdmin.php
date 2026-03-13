@@ -8,7 +8,7 @@ use SilverStripe\Forms\FormAction;
 
 class MessagesAdmin extends ModelAdmin {
 
-	// private static $menu_icon = 'app/images/cms/order-admin.png';
+	private static $menu_icon = 'mouseketeers/silverstripe-messages:client/icons/message.svg';
 	
 	private static $managed_models = array(
 		Message::class,
@@ -21,14 +21,17 @@ class MessagesAdmin extends ModelAdmin {
 	public function getEditForm($id = null, $fields = null) {
 	    $form = parent::getEditForm($id, $fields);
 
-	    foreach (array(Message::class, GroupMessage::class) as $class) {
+	    foreach ([Message::class, GroupMessage::class] as $class) {
 	        $gridField = $form->Fields()->dataFieldByName($this->sanitiseClassName($class));
 	        if ($gridField) {
 	            $config = $gridField->getConfig();
 	            $detailForm = $config->getComponentByType(GridFieldDetailForm::class);
 	            if ($detailForm) {
-	                $detailForm->setItemEditFormCallback(function($form, $controller) use ($class) {
+	                $detailForm->setItemEditFormCallback(function($form) {
 	                    $record = $form->getRecord();
+						if (!$record || !method_exists($record, 'canEdit') || !$record->canEdit()) {
+							return $form;
+						}
 						$buttonLabel = 'Send Message';
 						if($record->IsSent) {
 							$buttonLabel = 'Resend';
@@ -38,11 +41,11 @@ class MessagesAdmin extends ModelAdmin {
 								->setUseButtonTag(true)
 								->addExtraClass('btn btn-primary')
 						);
+						return $form;
 	                });
 	            }
 	        }
 	    }
-
 	    return $form;
 	}
 }
