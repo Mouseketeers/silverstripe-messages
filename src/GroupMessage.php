@@ -34,7 +34,7 @@ class GroupMessage extends DataObject
 		'Title' => 'Varchar(100)',
 		'Body' => 'HTMLText',
 		'SendEmail' => 'Boolean',
-		'SendPushNoticification' => 'Boolean',
+		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'Label' => 'Varchar(50)'
 	];
@@ -206,7 +206,7 @@ class GroupMessage extends DataObject
 		$message->ImageID = $this->ImageID;
 		$message->VideoID = $this->VideoID;
 		$message->SendEmail = $this->SendEmail;
-		$message->SendPushNoticification = $this->SendPushNoticification;
+		$message->SendPushNotification = $this->SendPushNotification;
 		$message->SubsiteID = $this->SubsiteID;
 		$message->Body = SSViewer::execute_string(
 			ShortcodeParser::get_active()->parse($this->Body),

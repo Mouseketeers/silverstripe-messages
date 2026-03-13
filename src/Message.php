@@ -32,7 +32,7 @@ class Message extends DataObject {
 		'Body' => 'HTMLText',
         'IsRead' => 'Boolean',
         'SendEmail' => 'Boolean',
-        'SendPushNoticification' => 'Boolean',
+        'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'Datetime'
 	);
@@ -159,7 +159,7 @@ class Message extends DataObject {
 			if($this->SendEmail) {
 				$this->SendEmail();
 			}
-			if($this->SendPushNoticification) {
+			if($this->SendPushNotification) {
 				$this->sendPushNotification();
 			}			
 			return true;
@@ -199,7 +199,7 @@ class Message extends DataObject {
 					->setFrom($fromEmailAddress, $fromEmailName)
 					->setTo($recipient->Email)
 					->setSubject($this->Title)
-					->setHTMLTemplate('Email/MessageEmail');
+					->setHTMLTemplate('MessageEmail');
 
 				$templateData = array(
 					'FirstName' => $recipient->FirstName,

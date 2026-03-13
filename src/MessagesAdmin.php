@@ -29,7 +29,7 @@ class MessagesAdmin extends ModelAdmin {
 	            if ($detailForm) {
 	                $detailForm->setItemEditFormCallback(function($form, $controller) use ($class) {
 	                    $record = $form->getRecord();
-						$buttonLabel = 'Send';
+						$buttonLabel = 'Send Message';
 						if($record->IsSent) {
 							$buttonLabel = 'Resend';
 						}
