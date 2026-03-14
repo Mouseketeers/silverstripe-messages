@@ -16,7 +16,8 @@ use SilverStripe\Core\Injector\Injector;
 use Mouseketeers\Messages\GroupMessage;
 use Mouseketeers\Messages\Service\MessageDispatcher;
 
-class Message extends DataObject {
+class Message extends DataObject
+{
 
 	/**
 	 * Runtime diagnostic, not persisted.
@@ -33,22 +34,22 @@ class Message extends DataObject {
 	private static $db = array(
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
-        'IsRead' => 'Boolean',
-        'SendEmail' => 'Boolean',
-        'SendPushNotification' => 'Boolean',
+		'IsRead' => 'Boolean',
+		'SendEmail' => 'Boolean',
+		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'Datetime',
 		'Channels' => 'Varchar(255)'
 	);
 
 	private static $has_one = array(
-        'Member' => Member::class,
+		'Member' => Member::class,
 		'GroupMessage' => GroupMessage::class,
 		'Image' => Image::class,
 		'Video' => File::class
 	);
 
-    private static $summary_fields = [
+	private static $summary_fields = [
 		'Recipient' => 'Recipient',
 		'Title' => 'Title',
 		'DateSent.Nice' => 'Sent'
@@ -58,20 +59,22 @@ class Message extends DataObject {
 
 	private static $default_channels = [];
 
-    public function populateDefaults()
-    {
+	public function populateDefaults()
+	{
 		$this->IsRead = false;
 		parent::populateDefaults();
-	}	
+	}
 
-	public function getRecipient() {
-		if(!$this->Member()->exists()) {
+	public function getRecipient()
+	{
+		if (!$this->Member()->exists()) {
 			return 'Recipient not found';
 		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
 	}
 
-	public function getCMSFields() {
+	public function getCMSFields()
+	{
 
 		$fields = parent::getCMSFields();
 
@@ -82,33 +85,32 @@ class Message extends DataObject {
 		$fields->removeByName('SendPushNotification');
 		$fields->removeByName('Channels');
 
-		if($this->IsSent) {
+		if ($this->IsSent) {
 			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
-		}
-		else {
+		} else {
 			$fields->removeByName('IsRead');
-		}		
+		}
 
 		if ($this->DateSent) {
 			$fields->insertBefore(
 				'Title',
 				ReadonlyField::create('DateSent', 'Sent')
 			);
-		}
-		else {
+		} else {
 			$fields->removeByName('DateSent');
 		}
 
 
 		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
-		if(!$this->IsSent) {
+		if (!$this->IsSent) {
 			$members = Member::get()->sort('Created DESC');
-			if($members) {
+			if ($members) {
 				$membersMap = [];
 				foreach ($members as $member) {
 					$membersMap[$member->ID] = $member->Email . ' (' . $member->FirstName . ' ' . $member->Surname . ')';
 				}
-				$fields->insertBefore('Title',
+				$fields->insertBefore(
+					'Title',
 					DropdownField::create('MemberID', 'Recipient')
 						->setSource($membersMap)
 						->setEmptyString('None')
@@ -122,12 +124,14 @@ class Message extends DataObject {
 				if (empty($this->Channels) && !empty($defaultChannels)) {
 					$channelField->setValue($defaultChannels);
 				}
-				$fields->insertBefore('Title',
+				$fields->insertBefore(
+					'Title',
 					$channelField
 				);
 			}
 		} else {
-			$fields->insertBefore('Title',
+			$fields->insertBefore(
+				'Title',
 				ReadonlyField::create('Recipient', 'Recipient', $this->getRecipient())
 			);
 			$channels = $this->getChannelsArray();
@@ -139,35 +143,38 @@ class Message extends DataObject {
 						$labels[] = (string) $map[$code];
 					}
 				}
-				$fields->insertBefore('Title',
+				$fields->insertBefore(
+					'Title',
 					ReadonlyField::create('ChannelsDisplay', 'Sent via', implode(', ', $labels))
 				);
 			}
 		}
 		return $fields;
 	}
-	public function getCMSValidator() {
-        $requiredFields = RequiredFields::create(
-            array(
+	public function getCMSValidator()
+	{
+		$requiredFields = RequiredFields::create(
+			array(
 				'Title',
 				'Body',
 				'MemberID'
-            )
-        );
+			)
+		);
 		if (class_exists(Subsite::class)) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
-        return $requiredFields;
+		return $requiredFields;
 	}
-	
-	public function process($data = null, $form = null) {
 
-		if($form) {
+	public function process($data = null, $form = null)
+	{
+
+		if ($form) {
 			$form->saveInto($this);
 		}
 		$channels = $this->getChannelsArray();
 
-		if($this->Member()->exists()) {
+		if ($this->Member()->exists()) {
 			if (!empty($channels)) {
 				$report = Injector::inst()->get(MessageDispatcher::class)->dispatchWithReport($this, $channels);
 				if (!$report['sent']) {
@@ -240,10 +247,8 @@ class Message extends DataObject {
 		return is_array($decoded) ? $decoded : [];
 	}
 
-
-
-
-	public function onAfterSerialize(&$formattedDataObjectMap) {
+	public function onAfterSerialize(&$formattedDataObjectMap)
+	{
 		$formattedDataObjectMap['SentAgo'] = $this->dbObject('DateSent')->Ago();
 		$formattedDataObjectMap['SentShort'] = $this->dbObject('DateSent')->Ago();
 	}
