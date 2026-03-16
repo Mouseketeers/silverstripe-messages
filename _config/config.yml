@@ -5,14 +5,6 @@ SilverStripe\Forms\GridField\GridFieldDetailForm_ItemRequest:
   extensions:
     - Mouseketeers\Messages\MessageDetailFormExtension
 
-Mouseketeers\Messages\Message:
-  extensions:
-    - Mouseketeers\Messages\Channel\PushMessageCMSFieldsExtension
-
-Mouseketeers\Messages\GroupMessage:
-  extensions:
-    - Mouseketeers\Messages\Channel\PushMessageCMSFieldsExtension
-
 # Optional project-level overrides (set these in the consuming project):
 # Mouseketeers\Messages\Service\MessageDispatcher:
 #   channel_classes:

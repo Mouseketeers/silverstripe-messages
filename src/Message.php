@@ -35,8 +35,6 @@ class Message extends DataObject
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
         'IsRead' => 'Boolean',
-        'SendEmail' => 'Boolean',
-        'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'Datetime',
 		'Channels' => 'Varchar(255)'
@@ -81,7 +79,6 @@ class Message extends DataObject
 		$fields->removeByName('IsSent');
 		$fields->removeByName('GroupMessageID');
 		$fields->removeByName('MemberID');
-		$fields->removeByName('SendEmail');
 		$fields->removeByName('Channels');
 
 		if($this->IsSent) {
@@ -198,12 +195,6 @@ class Message extends DataObject
 		$member = $this->Member();
 		if (!$member || !$member->exists()) {
 			return 'No recipient selected.';
-		}
-		if (!$member->Email) {
-			return 'Recipient has no email address.';
-		}
-		if (!filter_var($member->Email, FILTER_VALIDATE_EMAIL)) {
-			return 'Recipient email address is invalid: ' . $member->Email;
 		}
 
 		return 'No channel reported a successful send.';

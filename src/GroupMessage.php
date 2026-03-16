@@ -6,7 +6,6 @@ use SilverStripe\ORM\DataObject;
 use SilverStripe\Security\Group;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
-use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\Forms\CheckboxSetField;
 use SilverStripe\Forms\ListboxField;
 use SilverStripe\Forms\TextField;
@@ -34,8 +33,6 @@ class GroupMessage extends DataObject
 	private static $db = [
 		'Title' => 'Varchar(100)',
 		'Body' => 'HTMLText',
-		'SendEmail' => 'Boolean',
-		'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'Channels' => 'Varchar(255)',
 		'Label' => 'Varchar(50)'
@@ -74,7 +71,6 @@ class GroupMessage extends DataObject
 		$fields->removeByName('Groups');
 		$fields->removeByName('IsSent');
 		$fields->removeByName('Label');
-		$fields->removeByName('SendEmail');
 		$fields->removeByName('Channels');
 
 
@@ -209,8 +205,6 @@ class GroupMessage extends DataObject
 		$message->Title = $this->Title;
 		$message->ImageID = $this->ImageID;
 		$message->VideoID = $this->VideoID;
-		$message->SendEmail = $this->SendEmail;
-		$message->SendPushNotification = $this->SendPushNotification;
 		$channels = $this->getChannelsArray();
 		$message->Channels = !empty($channels) ? json_encode($channels) : null;
 		$message->SubsiteID = $this->SubsiteID;
