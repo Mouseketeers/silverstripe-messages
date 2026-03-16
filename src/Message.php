@@ -34,22 +34,22 @@ class Message extends DataObject
 	private static $db = array(
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
-		'IsRead' => 'Boolean',
-		'SendEmail' => 'Boolean',
-		'SendPushNotification' => 'Boolean',
+        'IsRead' => 'Boolean',
+        'SendEmail' => 'Boolean',
+        'SendPushNotification' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'Datetime',
 		'Channels' => 'Varchar(255)'
 	);
 
 	private static $has_one = array(
-		'Member' => Member::class,
+        'Member' => Member::class,
 		'GroupMessage' => GroupMessage::class,
 		'Image' => Image::class,
 		'Video' => File::class
 	);
 
-	private static $summary_fields = [
+    private static $summary_fields = [
 		'Recipient' => 'Recipient',
 		'Title' => 'Title',
 		'DateSent.Nice' => 'Sent'
@@ -59,15 +59,15 @@ class Message extends DataObject
 
 	private static $default_channels = [];
 
-	public function populateDefaults()
-	{
+    public function populateDefaults()
+    {
 		$this->IsRead = false;
 		parent::populateDefaults();
-	}
+	}	
 
 	public function getRecipient()
 	{
-		if (!$this->Member()->exists()) {
+		if(!$this->Member()->exists()) {
 			return 'Recipient not found';
 		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
@@ -82,14 +82,13 @@ class Message extends DataObject
 		$fields->removeByName('GroupMessageID');
 		$fields->removeByName('MemberID');
 		$fields->removeByName('SendEmail');
-		$fields->removeByName('SendPushNotification');
 		$fields->removeByName('Channels');
 
-		if ($this->IsSent) {
+		if($this->IsSent) {
 			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
 		} else {
 			$fields->removeByName('IsRead');
-		}
+		}		
 
 		if ($this->DateSent) {
 			$fields->insertBefore(
@@ -100,11 +99,10 @@ class Message extends DataObject
 			$fields->removeByName('DateSent');
 		}
 
-
 		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
-		if (!$this->IsSent) {
+		if(!$this->IsSent) {
 			$members = Member::get()->sort('Created DESC');
-			if ($members) {
+			if($members) {
 				$membersMap = [];
 				foreach ($members as $member) {
 					$membersMap[$member->ID] = $member->Email . ' (' . $member->FirstName . ' ' . $member->Surname . ')';
@@ -153,40 +151,40 @@ class Message extends DataObject
 	}
 	public function getCMSValidator()
 	{
-		$requiredFields = RequiredFields::create(
-			array(
+        $requiredFields = RequiredFields::create(
+            array(
 				'Title',
 				'Body',
 				'MemberID'
-			)
-		);
+            )
+        );
 		if (class_exists(Subsite::class)) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
-		return $requiredFields;
+        return $requiredFields;
 	}
-
+	
 	public function process($data = null, $form = null)
 	{
 
-		if ($form) {
+		if($form) {
 			$form->saveInto($this);
 		}
 		$channels = $this->getChannelsArray();
 
 		if ($this->Member()->exists()) {
-			if (!empty($channels)) {
-				$report = Injector::inst()->get(MessageDispatcher::class)->dispatchWithReport($this, $channels);
-				if (!$report['sent']) {
-					$this->sendFailureReason = $report['reason'] ?? '';
-					return false;
-				}
+		if (!empty($channels)) {
+			$report = Injector::inst()->get(MessageDispatcher::class)->dispatchWithReport($this, $channels);
+			if (!$report['sent']) {
+				$this->sendFailureReason = $report['reason'] ?? '';
+				return false;
 			}
-			$this->IsSent = true;
-			$this->DateSent = DBDatetime::now()->Rfc2822();
-			$this->write();
-			return true;
 		}
+		$this->IsSent = true;
+		$this->DateSent = DBDatetime::now()->Rfc2822();
+		$this->write();
+		return true;
+	}
 		$this->sendFailureReason = 'No recipient selected.';
 		return false;
 	}
@@ -208,33 +206,7 @@ class Message extends DataObject
 			return 'Recipient email address is invalid: ' . $member->Email;
 		}
 
-		$channels = $this->getChannelsArray();
-		if (empty($channels)) {
-			return 'No send channels are selected.';
-		}
-
-		if (in_array('email', $channels, true)) {
-			$fromEmail = self::config()->get('default_from_email');
-			if (!$fromEmail) {
-				$siteConfig = \SilverStripe\SiteConfig\SiteConfig::current_site_config();
-				$fromEmail = $siteConfig->DefaultFromEmail ?? null;
-			}
-			if (!$fromEmail) {
-				$fromEmail = \SilverStripe\Control\Email\Email::config()->get('admin_email');
-			}
-			if (!$fromEmail) {
-				return 'No sender email configured. Set Message.default_from_email, SiteConfig.DefaultFromEmail, or Email.admin_email.';
-			}
-			$fromEmailAddress = trim($fromEmail);
-			if (preg_match('/.*<([^>]+)>/', $fromEmailAddress, $matches)) {
-				$fromEmailAddress = trim($matches[1]);
-			}
-			if (!filter_var($fromEmailAddress, FILTER_VALIDATE_EMAIL)) {
-				return 'Sender email address is invalid: ' . $fromEmailAddress;
-			}
-		}
-
-		return 'No channel reported a successful send. Check mail transport and logs.';
+		return 'No channel reported a successful send.';
 	}
 
 	private function getChannelsArray(): array

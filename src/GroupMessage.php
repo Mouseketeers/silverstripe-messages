@@ -75,7 +75,6 @@ class GroupMessage extends DataObject
 		$fields->removeByName('IsSent');
 		$fields->removeByName('Label');
 		$fields->removeByName('SendEmail');
-		$fields->removeByName('SendPushNotification');
 		$fields->removeByName('Channels');
 
 
