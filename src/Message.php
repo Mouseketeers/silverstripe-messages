@@ -18,6 +18,19 @@ use Mouseketeers\Messages\Service\MessageDispatcher;
 
 class Message extends DataObject
 {
+	/**
+	 * Runtime template data for email rendering.
+	 *
+	 * @var array
+	 */
+	protected $data = [];
+
+	/**
+	 * Runtime email attachments.
+	 *
+	 * @var array
+	 */
+	protected $attachments = [];
 
 	/**
 	 * Runtime diagnostic, not persisted.
@@ -31,41 +44,69 @@ class Message extends DataObject
 	private static $singular_name = 'Message';
 	private static $plural_name = 'Messages';
 
-	private static $db = array(
+	private static $db = [
 		'Title' => 'Varchar(255)',
 		'Body' => 'HTMLText',
-        'IsRead' => 'Boolean',
+		'IsRead' => 'Boolean',
 		'IsSent' => 'Boolean',
 		'DateSent' => 'Datetime',
-		'Channels' => 'Varchar(255)'
-	);
-
-	private static $has_one = array(
-        'Member' => Member::class,
-		'GroupMessage' => GroupMessage::class,
-		'Image' => Image::class,
-		'Video' => File::class
-	);
-
-    private static $summary_fields = [
-		'Recipient' => 'Recipient',
-		'Title' => 'Title',
-		'DateSent.Nice' => 'Sent'
+		'Channels' => 'Varchar(255)',
 	];
 
+	private static $has_one = [
+		'Member' => Member::class,
+		'GroupMessage' => GroupMessage::class,
+		'Image' => Image::class,
+		'Video' => File::class,
+	];
+
+	private static $summary_fields = [
+		'Recipient' => 'Recipient',
+		'Title' => 'Title',
+		'DateSent.Nice' => 'Sent',
+	];
+
+	private static $searchable_fields = [
+		'Title',
+		'Recipient'
+	];
 	private static $default_sort = 'DateSent DESC, Created DESC';
 
 	private static $default_channels = [];
 
-    public function populateDefaults()
-    {
+	public function __construct($record = [], $creationType = self::CREATE_OBJECT, $queryParams = [], $body = null)
+	{
+		if (is_string($record) && is_string($creationType)) {
+			parent::__construct([], self::CREATE_OBJECT, []);
+			if ($this->hasMethod('configureEmailMessage')) {
+				$this->configureEmailMessage(
+					$record,
+					$creationType,
+					is_string($queryParams) ? $queryParams : null,
+					is_string($body) ? $body : null
+				);
+			}
+			return;
+		}
+
+		parent::__construct($record, $creationType, $queryParams);
+	}
+
+	public function populateDefaults()
+	{
 		$this->IsRead = false;
 		parent::populateDefaults();
-	}	
+	}
 
 	public function getRecipient()
 	{
-		if(!$this->Member()->exists()) {
+		if (!$this->Member()->exists()) {
+			if ($this->hasMethod('getResolvedRecipientEmail')) {
+				$recipientEmail = $this->getResolvedRecipientEmail();
+				if (!empty($recipientEmail)) {
+					return $recipientEmail;
+				}
+			}
 			return 'Recipient not found';
 		}
 		return $this->Member()->Name . ' (' . $this->Member()->Email . ')';
@@ -73,7 +114,6 @@ class Message extends DataObject
 
 	public function getCMSFields()
 	{
-
 		$fields = parent::getCMSFields();
 
 		$fields->removeByName('IsSent');
@@ -81,11 +121,11 @@ class Message extends DataObject
 		$fields->removeByName('MemberID');
 		$fields->removeByName('Channels');
 
-		if($this->IsSent) {
+		if ($this->IsSent) {
 			$fields->replaceField('IsRead', ReadonlyField::create('IsRead', 'Is Read'));
 		} else {
 			$fields->removeByName('IsRead');
-		}		
+		}
 
 		if ($this->DateSent) {
 			$fields->insertBefore(
@@ -97,9 +137,9 @@ class Message extends DataObject
 		}
 
 		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
-		if(!$this->IsSent) {
+		if (!$this->IsSent) {
 			$members = Member::get()->sort('Created DESC');
-			if($members) {
+			if ($members) {
 				$membersMap = [];
 				foreach ($members as $member) {
 					$membersMap[$member->ID] = $member->Email . ' (' . $member->FirstName . ' ' . $member->Surname . ')';
@@ -112,6 +152,7 @@ class Message extends DataObject
 						->setDisabled(false)
 				);
 			}
+
 			$channelsMap = $dispatcher->getChannelsMap();
 			if ($channelsMap) {
 				$channelField = CheckboxSetField::create('Channels', 'Send as', $channelsMap);
@@ -129,6 +170,7 @@ class Message extends DataObject
 				'Title',
 				ReadonlyField::create('Recipient', 'Recipient', $this->getRecipient())
 			);
+
 			$channels = $this->getChannelsArray();
 			if ($channels) {
 				$map = $dispatcher->getChannelsMap();
@@ -144,32 +186,34 @@ class Message extends DataObject
 				);
 			}
 		}
+
 		return $fields;
 	}
+
 	public function getCMSValidator()
 	{
-        $requiredFields = RequiredFields::create(
-            array(
-				'Title',
-				'Body',
-				'MemberID'
-            )
-        );
+		$requiredFields = RequiredFields::create([
+			'Title',
+			'Body',
+		]);
 		if (class_exists(Subsite::class)) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
-        return $requiredFields;
+		return $requiredFields;
 	}
-	
+
 	public function process($data = null, $form = null)
 	{
-
-		if($form) {
+		if ($form) {
 			$form->saveInto($this);
 		}
+
+		if (!$this->exists()) {
+			$this->write();
+		}
+
 		$channels = $this->getChannelsArray();
 
-		if ($this->Member()->exists()) {
 		if (!empty($channels)) {
 			$report = Injector::inst()->get(MessageDispatcher::class)->dispatchWithReport($this, $channels);
 			if (!$report['sent']) {
@@ -177,13 +221,44 @@ class Message extends DataObject
 				return false;
 			}
 		}
+
 		$this->IsSent = true;
 		$this->DateSent = DBDatetime::now()->Rfc2822();
 		$this->write();
 		return true;
 	}
-		$this->sendFailureReason = 'No recipient selected.';
-		return false;
+
+	public function send(): bool
+	{
+		$this->ensureSendChannels();
+		return $this->process();
+	}
+
+	public function setData(array $data)
+	{
+		$this->data = $data;
+		return $this;
+	}
+
+	public function getData(): array
+	{
+		return $this->data;
+	}
+
+	public function addAttachment(string $path, ?string $name = null, ?string $mimeType = null)
+	{
+		$this->attachments[] = [
+			'path' => $path,
+			'name' => $name,
+			'mimeType' => $mimeType,
+		];
+
+		return $this;
+	}
+
+	public function getAttachments(): array
+	{
+		return $this->attachments;
 	}
 
 	public function getSendFailureReason(): string
@@ -192,8 +267,7 @@ class Message extends DataObject
 			return $this->sendFailureReason;
 		}
 
-		$member = $this->Member();
-		if (!$member || !$member->exists()) {
+		if ($this->hasMethod('getResolvedRecipientEmail') && empty($this->getResolvedRecipientEmail())) {
 			return 'No recipient selected.';
 		}
 
@@ -208,6 +282,16 @@ class Message extends DataObject
 
 		$decoded = json_decode((string) $this->Channels, true);
 		return is_array($decoded) ? $decoded : [];
+	}
+
+	private function ensureSendChannels(): void
+	{
+		$channels = $this->getChannelsArray();
+		if (empty($channels)) {
+			$configured = self::config()->get('default_channels') ?: [];
+			$channels = !empty($configured) ? $configured : ['email'];
+			$this->Channels = json_encode(array_values(array_unique($channels)));
+		}
 	}
 
 	public function onAfterSerialize(&$formattedDataObjectMap)
