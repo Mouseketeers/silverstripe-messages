@@ -60,6 +60,11 @@ class Message extends DataObject
 		'SendPushNotification' => 'Send Push Notification to App Users',
 	];
 
+	private static $searchable_fields = [
+		'Title',
+		'Member.Email'
+	];
+
 	public function populateDefaults()
 	{
 		if (class_exists('Subsite')) {
