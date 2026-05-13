@@ -212,6 +212,7 @@ class GroupMessage extends DataObject
 							if ($result['push_sent']) {
 								$stats['push_notifications_sent']++;
 							}
+							$existingMessages[] = $member->ID; // Add to existing messages to prevent duplicates in the same run
 						}
 						sleep(1);
 					} else {
@@ -220,7 +221,6 @@ class GroupMessage extends DataObject
 				}
 			}
 		}
-
 		return $stats;
 	}
 
