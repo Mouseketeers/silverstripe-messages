@@ -1,0 +1,13 @@
+SilverStripe\ORM\DatabaseAdmin:
+  classname_value_remapping:
+    MessageDetailFormExtension: Mouseketeers\Messages\MessageDetailFormExtension
+    GroupMessageSubsitesExtension: Mouseketeers\Messages\GroupMessageSubsitesExtension
+    EmailChannel: Mouseketeers\Messages\Channel\EmailChannel
+    PushMessageChannel: Mouseketeers\Messages\Channel\PushMessageChannel
+    ProcessMessagesJob: Mouseketeers\Messages\ProcessMessagesJob
+    MigrateMessageChannelsTask: Mouseketeers\Messages\Task\MigrateMessageChannelsTask
+    MessageDispatcher: Mouseketeers\Messages\Service\MessageDispatcher
+    MessageSubsitesExtension: Mouseketeers\Messages\MessageSubsitesExtension
+    GroupMessage: Mouseketeers\Messages\GroupMessage
+    Message: Mouseketeers\Messages\Message
+    MessagesAdmin: Mouseketeers\Messages\MessagesAdmin
