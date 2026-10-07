@@ -23,9 +23,12 @@
         "symbiote/silverstripe-queuedjobs": "^4.0"
     },
     "minimum-stability": "stable",
-	"extra": {
-		"installer-name": "messages"
-	},
+    "extra": {
+        "installer-name": "messages",
+        "expose": [
+            "client"
+        ]
+    },
     "autoload": {
         "psr-4": {
             "Mouseketeers\\Messages\\": "src/"
