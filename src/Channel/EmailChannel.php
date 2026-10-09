@@ -8,6 +8,7 @@ use SilverStripe\Core\Config\Config;
 use SilverStripe\SiteConfig\SiteConfig;
 use SilverStripe\View\SSViewer;
 use RuntimeException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class EmailChannel implements MessageChannelInterface
 {
@@ -76,9 +77,10 @@ class EmailChannel implements MessageChannelInterface
                 'Video'     => $message->Video(),
             ]);
 
-            $sent = $email->send();
-            if (!$sent) {
-                throw new RuntimeException('Mailer rejected the email (no recipients accepted). Check SMTP/mail transport settings.');
+            try {
+                $email->send();
+            } catch (TransportExceptionInterface $e) {
+                throw new RuntimeException('Mailer failed to send the email: ' . $e->getMessage(), 0, $e);
             }
             return true;
         } finally {
