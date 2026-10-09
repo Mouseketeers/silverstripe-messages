@@ -95,7 +95,7 @@ class Message extends DataObject
 	public function populateDefaults()
 	{
 		$this->IsRead = false;
-		parent::populateDefaults();
+		return parent::populateDefaults();
 	}
 
 	public function getRecipient()
