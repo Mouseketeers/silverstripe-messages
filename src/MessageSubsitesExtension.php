@@ -22,10 +22,10 @@ class MessageSubsitesExtension extends DataExtension
 
     public function populateDefaults()
     {
-        if (!$this->owner->SubsiteID) {
-            $this->owner->SubsiteID = (int) Subsite::currentSubsiteID();
-            if (!$this->owner->SubsiteID) {
-                $this->owner->SubsiteID = 0;
+        if (!$this->getOwner()->SubsiteID) {
+            $this->getOwner()->SubsiteID = (int) Subsite::currentSubsiteID();
+            if (!$this->getOwner()->SubsiteID) {
+                $this->getOwner()->SubsiteID = 0;
             }
         }
     }
@@ -42,9 +42,9 @@ class MessageSubsitesExtension extends DataExtension
 
     public function updateCMSFields(FieldList $fields)
     {
-        if ($this->owner->IsSent) {
+        if ($this->getOwner()->IsSent) {
             $fields->removeByName('SubsiteID');
-            $subsite = $this->owner->Subsite();
+            $subsite = $this->getOwner()->Subsite();
             $fields->addFieldToTab(
                 'Root.Main',
                 ReadonlyField::create(
@@ -72,11 +72,11 @@ class MessageSubsitesExtension extends DataExtension
 
     public function beforeSendMessageEmail()
     {
-        if (!$this->owner->SubsiteID) {
+        if (!$this->getOwner()->SubsiteID) {
             return;
         }
 
-        $subsite = Subsite::get()->byID((int) $this->owner->SubsiteID);
+        $subsite = Subsite::get()->byID((int) $this->getOwner()->SubsiteID);
         if ($subsite && $subsite->Theme) {
             SSViewer::set_themes([$subsite->Theme, '$default']);
         }

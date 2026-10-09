@@ -105,7 +105,7 @@ class GroupMessage extends DataObject
 				// Remove the unlink action
 				$config->removeComponentsByType(GridFieldDeleteAction::class);
 				// Add the delete action
-				$config->addComponent(new GridFieldDeleteAction());
+				$config->addComponent(\SilverStripe\Forms\GridField\GridFieldDeleteAction::create());
 			}
 
 			$dispatcher = Injector::inst()->get(MessageDispatcher::class);
@@ -204,7 +204,7 @@ class GroupMessage extends DataObject
 			return null;
 		}
 
-		$message = new Message();
+		$message = \Mouseketeers\Messages\Message::create();
 		$message->MemberID = $member->ID;
 		$message->GroupMessageID = $this->ID;
 		$message->Title = $this->Title;

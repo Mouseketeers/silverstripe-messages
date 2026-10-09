@@ -138,7 +138,7 @@ class Message extends DataObject
 
 		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
 		if (!$this->IsSent) {
-			$members = Member::get()->sort('Created DESC');
+			$members = Member::get()->sort(['Created' => 'DESC']);
 			if ($members) {
 				$membersMap = [];
 				foreach ($members as $member) {
