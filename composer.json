@@ -16,11 +16,11 @@
     ],
     "license": "BSD-3-Clause",
     "require": {
-        "php": "^7.1 || ^8.0",
-        "silverstripe/framework": "^4.0",
-        "silverstripe/admin": "^1.0",
-        "silverstripe/assets": "^1.0",
-        "symbiote/silverstripe-queuedjobs": "^4.0"
+        "php": "^8.1",
+        "silverstripe/framework": "^5",
+        "silverstripe/admin": "^2",
+        "silverstripe/assets": "^2",
+        "symbiote/silverstripe-queuedjobs": "^5"
     },
     "minimum-stability": "stable",
     "extra": {
