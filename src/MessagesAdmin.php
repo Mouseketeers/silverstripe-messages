@@ -10,10 +10,10 @@ class MessagesAdmin extends ModelAdmin {
 
 	private static $menu_icon = 'mouseketeers/silverstripe-messages:client/icons/message.svg';
 	
-	private static $managed_models = array(
+	private static $managed_models = [
 		Message::class,
 		GroupMessage::class
-	);
+	];
 	private static $url_segment = 'messages';
 
 	private static $menu_title = 'Messages';

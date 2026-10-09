@@ -199,9 +199,7 @@ class PushMessageChannel implements MessageChannelInterface
             'exp' => $now + 3600,
         ];
 
-        $base64UrlEncode = static function (array $data): string {
-            return rtrim(strtr(base64_encode(json_encode($data)), '+/', '-_'), '=');
-        };
+        $base64UrlEncode = (static fn(array $data): string => rtrim(strtr(base64_encode(json_encode($data)), '+/', '-_'), '='));
 
         $header = $base64UrlEncode($jwtHeader);
         $claims = $base64UrlEncode($jwtClaimSet);

@@ -79,7 +79,7 @@ class GroupMessage extends DataObject
 
 			$groups = Group::get();
 			if ($groups) {
-				$groupsMap = array();
+				$groupsMap = [];
 				foreach ($groups as $group) {
 					$groupsMap[$group->ID] = $group->getBreadcrumbs(' > ');
 				}
@@ -137,13 +137,13 @@ class GroupMessage extends DataObject
 	public function getCMSValidator()
 	{
 		$requiredFields = RequiredFields::create(
-			array(
+			[
 				'Title',
 				'Body',
 				'Groups'
-			)
+			]
 		);
-		if (class_exists('SilverStripe\Subsites\Model\Subsite')) {
+		if (class_exists(\SilverStripe\Subsites\Model\Subsite::class)) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
 		return $requiredFields;
