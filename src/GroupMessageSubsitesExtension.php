@@ -19,10 +19,10 @@ class GroupMessageSubsitesExtension extends DataExtension
 
     public function populateDefaults()
     {
-        if (!$this->owner->SubsiteID) {
-            $this->owner->SubsiteID = (int) Subsite::currentSubsiteID();
-            if (!$this->owner->SubsiteID) {
-                $this->owner->SubsiteID = 0;
+        if (!$this->getOwner()->SubsiteID) {
+            $this->getOwner()->SubsiteID = (int) Subsite::currentSubsiteID();
+            if (!$this->getOwner()->SubsiteID) {
+                $this->getOwner()->SubsiteID = 0;
             }
         }
     }
