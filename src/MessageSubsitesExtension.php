@@ -2,15 +2,15 @@
 
 namespace Mouseketeers\Messages;
 
+use SilverStripe\Core\Extension;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\RequiredFields;
-use SilverStripe\ORM\DataExtension;
 use SilverStripe\View\SSViewer;
 use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\Forms\ReadonlyField;
 
-class MessageSubsitesExtension extends DataExtension
+class MessageSubsitesExtension extends Extension
 {
     private static $has_one = [
         'Subsite' => Subsite::class,

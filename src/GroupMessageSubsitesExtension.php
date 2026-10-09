@@ -2,12 +2,12 @@
 
 namespace Mouseketeers\Messages;
 
+use SilverStripe\Core\Extension;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FieldList;
-use SilverStripe\ORM\DataExtension;
 use SilverStripe\Subsites\Model\Subsite;
 
-class GroupMessageSubsitesExtension extends DataExtension
+class GroupMessageSubsitesExtension extends Extension
 {
     private static $has_one = [
         'Subsite' => Subsite::class,

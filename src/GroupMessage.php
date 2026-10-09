@@ -2,6 +2,7 @@
 
 namespace Mouseketeers\Messages;
 
+use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Security\Group;
 use SilverStripe\Assets\File;
@@ -105,7 +106,7 @@ class GroupMessage extends DataObject
 				// Remove the unlink action
 				$config->removeComponentsByType(GridFieldDeleteAction::class);
 				// Add the delete action
-				$config->addComponent(\SilverStripe\Forms\GridField\GridFieldDeleteAction::create());
+				$config->addComponent(GridFieldDeleteAction::create());
 			}
 
 			$dispatcher = Injector::inst()->get(MessageDispatcher::class);
@@ -143,7 +144,7 @@ class GroupMessage extends DataObject
 				'Groups'
 			]
 		);
-		if (class_exists(\SilverStripe\Subsites\Model\Subsite::class)) {
+		if (class_exists(Subsite::class)) {
 			$requiredFields->addRequiredField('SubsiteID');
 		}
 		return $requiredFields;
@@ -204,7 +205,7 @@ class GroupMessage extends DataObject
 			return null;
 		}
 
-		$message = \Mouseketeers\Messages\Message::create();
+		$message = Message::create();
 		$message->MemberID = $member->ID;
 		$message->GroupMessageID = $this->ID;
 		$message->Title = $this->Title;

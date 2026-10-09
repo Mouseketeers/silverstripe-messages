@@ -2,6 +2,7 @@
 
 namespace Mouseketeers\Messages\Service;
 
+use Mouseketeers\Messages\Channel\EmailChannel;
 use Mouseketeers\Messages\Message;
 use Mouseketeers\Messages\Channel\MessageChannelInterface;
 use SilverStripe\Core\Config\Configurable;
@@ -32,10 +33,10 @@ class MessageDispatcher
     {
         $channels = [];
         $channelClasses = (array) self::config()->get('channel_classes');
-        if (empty($channelClasses) && class_exists(\Mouseketeers\Messages\Channel\EmailChannel::class)) {
+        if (empty($channelClasses) && class_exists(EmailChannel::class)) {
             // Safe fallback during transition if config cache/build is stale.
             $channelClasses = [
-                'email' => \Mouseketeers\Messages\Channel\EmailChannel::class,
+                'email' => EmailChannel::class,
             ];
         }
 
