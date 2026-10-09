@@ -32,10 +32,10 @@ class MessageDispatcher
     {
         $channels = [];
         $channelClasses = (array) self::config()->get('channel_classes');
-        if (empty($channelClasses) && class_exists('Mouseketeers\\Messages\\Channel\\EmailChannel')) {
+        if (empty($channelClasses) && class_exists(\Mouseketeers\Messages\Channel\EmailChannel::class)) {
             // Safe fallback during transition if config cache/build is stale.
             $channelClasses = [
-                'email' => 'Mouseketeers\\Messages\\Channel\\EmailChannel',
+                'email' => \Mouseketeers\Messages\Channel\EmailChannel::class,
             ];
         }
 
@@ -79,11 +79,9 @@ class MessageDispatcher
      */
     public function dispatchWithReport(Message $message, ?array $selected = null): array
     {
-        if ($selected === null) {
-            $selected = is_array($message->Channels)
-                ? $message->Channels
-                : (json_decode((string) $message->Channels, true) ?: []);
-        }
+        $selected ??= is_array($message->Channels)
+            ? $message->Channels
+            : (json_decode((string) $message->Channels, true) ?: []);
         if (empty($selected)) {
             return [
                 'sent' => false,
