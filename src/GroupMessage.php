@@ -7,6 +7,7 @@ use SilverStripe\Security\Group;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
 use SilverStripe\Forms\CheckboxSetField;
+use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\ListboxField;
 use SilverStripe\Forms\TextField;
 use SilverStripe\Forms\RequiredFields;
@@ -66,68 +67,72 @@ class GroupMessage extends DataObject
 
 	public function getCMSFields()
 	{
-		$fields = parent::getCMSFields();
+		// Build our fields before extensions run, so updateCMSFields() (e.g. the
+		// subsites extension) sees the Recipients listbox rather than the
+		// scaffolded Groups tab, which we remove.
+		$this->beforeUpdateCMSFields(function (FieldList $fields) {
+			$fields->removeByName('Groups');
+			$fields->removeByName('IsSent');
+			$fields->removeByName('Label');
+			$fields->removeByName('Channels');
 
-		$fields->removeByName('Groups');
-		$fields->removeByName('IsSent');
-		$fields->removeByName('Label');
-		$fields->removeByName('Channels');
 
-
-		$groups = Group::get();
-		if ($groups) {
-			$groupsMap = array();
-			foreach ($groups as $group) {
-				$groupsMap[$group->ID] = $group->getBreadcrumbs(' > ');
+			$groups = Group::get();
+			if ($groups) {
+				$groupsMap = array();
+				foreach ($groups as $group) {
+					$groupsMap[$group->ID] = $group->getBreadcrumbs(' > ');
+				}
+				asort($groupsMap);
+				$fields->insertBefore(
+					'Title',
+					ListboxField::create('Groups', 'Recipients')
+						->setSource($groupsMap)
+						->setAttribute(
+							'data-placeholder',
+							'Add group'
+						)
+				);
 			}
-			asort($groupsMap);
-			$fields->insertBefore(
-				'Title',
-				ListboxField::create('Groups', 'Recipients')
-					->setSource($groupsMap)
-					->setAttribute(
-						'data-placeholder',
-						'Add group'
-					)
-			);
-		}
 
-		// Modify the related Messages GridField
-		if ($messagesField = $fields->dataFieldByName('Messages')) {
-			$config = $messagesField->getConfig();
-			// Remove the "Add New" button
-			$config->removeComponentsByType(GridFieldAddNewButton::class);
-			// Remove the "Add Existing" button
-			$config->removeComponentsByType(GridFieldAddExistingAutocompleter::class);
-			// Remove the unlink action
-			$config->removeComponentsByType(GridFieldDeleteAction::class);
-			// Add the delete action
-			$config->addComponent(new GridFieldDeleteAction());
-		}
-
-		$dispatcher = Injector::inst()->get(MessageDispatcher::class);
-		$channelsMap = $dispatcher->getChannelsMap();
-		if ($channelsMap) {
-			$channelField = CheckboxSetField::create('Channels', 'Send as', $channelsMap);
-			$defaultChannels = $this->getConfiguredDefaultChannels();
-			if (empty($this->getChannelsArray()) && !empty($defaultChannels)) {
-				$channelField->setValue($defaultChannels);
+			// Modify the related Messages GridField
+			if ($messagesField = $fields->dataFieldByName('Messages')) {
+				$config = $messagesField->getConfig();
+				// Remove the "Add New" button
+				$config->removeComponentsByType(GridFieldAddNewButton::class);
+				// Remove the "Add Existing" button
+				$config->removeComponentsByType(GridFieldAddExistingAutocompleter::class);
+				// Remove the unlink action
+				$config->removeComponentsByType(GridFieldDeleteAction::class);
+				// Add the delete action
+				$config->addComponent(new GridFieldDeleteAction());
 			}
-			$fields->insertBefore(
-				'Title',
-				$channelField
-			);
-		}
 
-		$fields->addFieldToTab(
-			'Root.Main',
-			TextField::create(
-				'Label',
-				'Label (optional)',
-				$this->Label
-			)->setDescription('Used for automated messages sent on specific occasions, such as a new user registration.')
-		);
-		return $fields;
+			$dispatcher = Injector::inst()->get(MessageDispatcher::class);
+			$channelsMap = $dispatcher->getChannelsMap();
+			if ($channelsMap) {
+				$channelField = CheckboxSetField::create('Channels', 'Send as', $channelsMap);
+				$defaultChannels = $this->getConfiguredDefaultChannels();
+				if (empty($this->getChannelsArray()) && !empty($defaultChannels)) {
+					$channelField->setValue($defaultChannels);
+				}
+				$fields->insertBefore(
+					'Title',
+					$channelField
+				);
+			}
+
+			$fields->addFieldToTab(
+				'Root.Main',
+				TextField::create(
+					'Label',
+					'Label (optional)',
+					$this->Label
+				)->setDescription('Used for automated messages sent on specific occasions, such as a new user registration.')
+			);
+		});
+
+		return parent::getCMSFields();
 	}
 	public function getCMSValidator()
 	{

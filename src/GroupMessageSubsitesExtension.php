@@ -42,7 +42,7 @@ class GroupMessageSubsitesExtension extends DataExtension
         )->setEmptyString('Select site...');
 
         if ($fields->dataFieldByName('Groups')) {
-            $fields->insertAfter($subsiteField, 'Groups');
+            $fields->insertAfter('Groups', $subsiteField);
             return;
         }
 

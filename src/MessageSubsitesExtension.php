@@ -6,8 +6,9 @@ use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\RequiredFields;
 use SilverStripe\ORM\DataExtension;
-use SilverStripe\Subsites\Model\Subsite;
 use SilverStripe\View\SSViewer;
+use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\Forms\ReadonlyField;
 
 class MessageSubsitesExtension extends DataExtension
 {
@@ -41,6 +42,19 @@ class MessageSubsitesExtension extends DataExtension
 
     public function updateCMSFields(FieldList $fields)
     {
+        if ($this->owner->IsSent) {
+            $fields->removeByName('SubsiteID');
+            $subsite = $this->owner->Subsite();
+            $fields->addFieldToTab(
+                'Root.Main',
+                ReadonlyField::create(
+                    'SubsiteTitle',
+                    'Send from Site',
+                    $subsite->exists() ? $subsite->Title : ''
+                )
+            );
+            return;
+        }
 
         $subsiteField = DropdownField::create(
             'SubsiteID',
