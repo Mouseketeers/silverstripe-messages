@@ -8,6 +8,7 @@ use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\RequiredFields;
 use SilverStripe\View\SSViewer;
 use SilverStripe\Subsites\Model\Subsite;
+use SilverStripe\Subsites\State\SubsiteState;
 use SilverStripe\Forms\ReadonlyField;
 
 class MessageSubsitesExtension extends Extension
@@ -23,7 +24,7 @@ class MessageSubsitesExtension extends Extension
     public function populateDefaults()
     {
         if (!$this->getOwner()->SubsiteID) {
-            $this->getOwner()->SubsiteID = (int) Subsite::currentSubsiteID();
+            $this->getOwner()->SubsiteID = (int) SubsiteState::singleton()->getSubsiteId();
             if (!$this->getOwner()->SubsiteID) {
                 $this->getOwner()->SubsiteID = 0;
             }
