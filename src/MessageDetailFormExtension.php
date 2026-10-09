@@ -2,6 +2,7 @@
 
 namespace Mouseketeers\Messages;
 
+use Throwable;
 use SilverStripe\Core\Extension;
 use Mouseketeers\Messages\Message;
 
@@ -27,7 +28,7 @@ class MessageDetailFormExtension extends Extension {
                 }
             }
         }
-        catch (\Throwable $exception) {
+        catch (Throwable $exception) {
             $form->sessionMessage('Failed to send message: ' . $exception->getMessage(), 'bad');
         }
         return $form->getController()->redirect($form->getController()->Link());
