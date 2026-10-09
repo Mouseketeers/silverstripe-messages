@@ -64,7 +64,7 @@ class MessageSubsitesExtension extends Extension
         )->setEmptyString('Select site...');
 
         if ($fields->dataFieldByName('MemberID')) {
-            $fields->insertBefore($subsiteField, 'MemberID');
+            $fields->insertBefore('MemberID', $subsiteField);
             return;
         }
 
